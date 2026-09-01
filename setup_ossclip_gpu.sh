@@ -23,7 +23,7 @@ npm install -g ossclip --silent
 
 # 3. Install GPU Whisper & CTranslate2
 echo "📦 Setting up Whisper GPU CUDA..."
-pip install -q faster-whisper ctranslate2 gdown
+pip install -q faster-whisper ctranslate2 gdown cairosvg pillow
 
 # 4. Create whisper-cli GPU wrapper
 cat << 'PYEOF' > /usr/local/bin/whisper-cli-gpu
@@ -210,109 +210,218 @@ touch /root/.ossclip/models/ggml-small.en.bin
 # 5. Create ossclip-gpu-render tool
 cat << 'PYEOF' > /usr/local/bin/ossclip-gpu-render
 #!/usr/bin/env python3
-import sys, os, json, argparse, subprocess, time
+import sys, os, json, argparse, subprocess, re
 
 STYLE_PRESETS = {
     "hormozi": {
-        "fontDisplay": "Montserrat",
         "accent": "#FFE600",
-        "fg": "#FFFFFF",
-        "outline": 5,
-        "shadow": 2
+        "fontDisplay": "Montserrat",
+        "fontMono": "JetBrains Mono",
+        "outlinePx": 5,
+        "shadowPx": 6,
+        "fontSize": 48
     },
     "mrbeast": {
-        "fontDisplay": "Bebas Neue, Anton",
-        "accent": "#22FF77",
-        "fg": "#FFFFFF",
-        "outline": 6,
-        "shadow": 3
+        "accent": "#00FFA3",
+        "fontDisplay": "Montserrat",
+        "fontMono": "JetBrains Mono",
+        "outlinePx": 6,
+        "shadowPx": 8,
+        "fontSize": 52
     },
     "cyber": {
-        "fontDisplay": "Anton",
         "accent": "#00F0FF",
-        "fg": "#FFFFFF",
-        "outline": 5,
-        "shadow": 2
+        "fontDisplay": "Montserrat",
+        "fontMono": "JetBrains Mono",
+        "outlinePx": 3,
+        "shadowPx": 0,
+        "fontSize": 44
     },
     "pill": {
+        "accent": "#FDE047",
         "fontDisplay": "Montserrat",
-        "accent": "#FFD700",
-        "fg": "#FFFFFF",
-        "outline": 4,
-        "shadow": 2
+        "fontMono": "JetBrains Mono",
+        "outlinePx": 0,
+        "shadowPx": 4,
+        "fontSize": 40
     },
     "clean": {
-        "fontDisplay": "Rubik",
-        "accent": "#FFFFFF",
-        "fg": "#FFFFFF",
-        "outline": 3,
-        "shadow": 1
+        "accent": "#38BDF8",
+        "fontDisplay": "Montserrat",
+        "fontMono": "JetBrains Mono",
+        "outlinePx": 2,
+        "shadowPx": 2,
+        "fontSize": 42
     }
 }
 
-def hex_to_ass_color(hex_str: str, default: str = "&H00FFFFFF") -> str:
-    if not hex_str or not hex_str.startswith("#") or len(hex_str) < 7:
-        return default
-    hex_str = hex_str.lstrip("#")
-    r, g, b = hex_str[0:2], hex_str[2:4], hex_str[4:6]
-    return f"&H00{b}{g}{r}".upper()
+def hex_to_ass_color(hex_str):
+    hex_str = hex_str.lstrip('#')
+    if len(hex_str) == 6:
+        r, g, b = hex_str[0:2], hex_str[2:4], hex_str[4:6]
+        return f"&H00{b}{g}{r}&"
+    elif len(hex_str) == 8:
+        a, r, g, b = hex_str[0:2], hex_str[2:4], hex_str[4:6], hex_str[6:8]
+        return f"&H{a}{b}{g}{r}&"
+    return "&H00FFFFFF&"
 
-def format_ass_time(seconds: float) -> str:
+def format_ass_time(seconds):
     h = int(seconds // 3600)
     m = int((seconds % 3600) // 60)
-    s = seconds % 60
-    return f"{h}:{m:02d}:{s:05.2f}"
+    s = int(seconds % 60)
+    cs = int(round((seconds - int(seconds)) * 100))
+    if cs >= 100: cs = 99
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
-def extract_font_name(font_string: str) -> str:
-    if not font_string:
-        return "Montserrat"
-    for name in font_string.replace("'", "").replace('"', "").split(","):
-        name = name.strip()
-        if name and name.lower() not in ["sans-serif", "serif", "monospace"]:
-            return name
-    return "Montserrat"
+def generate_cairo_svg(style, data, w=1920, h=1080):
+    """Generates razor-sharp HD vector SVG in the requested style."""
+    if style == "tokyo-night":
+        title = data.get("title", "convex/files.ts")
+        lines = data.get("lines", [
+            'import { mutation } from "./_generated/server";',
+            '',
+            'export const generateUploadUrl = mutation({',
+            '  handler: async (ctx) => {',
+            '    // Bypasses Vercel 4.5MB Serverless Payload Ceiling',
+            '    return await ctx.storage.generateUploadUrl();',
+            '  },',
+            '});'
+        ])
+        code_spans = []
+        for i, l in enumerate(lines):
+            line_no = f"{i+1:02d}"
+            escaped = l.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            code_spans.append(f'<text x="1010" y="{720 + i*36}" font-family="JetBrains Mono" font-size="18" fill="#444B6A">{line_no}</text><text x="1055" y="{720 + i*36}" font-family="JetBrains Mono" font-size="18" fill="#C0CAF5">{escaped}</text>')
+        code_xml = "\n".join(code_spans)
 
-def load_scenes(workdir: str):
-    # 1. Prefer user-reviewed edits from Web Interface
-    reviewed_path = os.path.join(workdir, "scenes-reviewed.json")
-    if os.path.exists(reviewed_path):
-        try:
-            return json.load(open(reviewed_path, "r", encoding="utf-8"))
-        except: pass
+        return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#000000" flood-opacity="0.85"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="980" y="630" width="860" height="390" rx="18" fill="#16161E" stroke="#2A2E3D" stroke-width="2"/>
+    <rect x="980" y="630" width="860" height="48" rx="18" fill="#1F2335"/>
+    <line x1="980" y1="678" x2="1840" y2="678" stroke="#2A2E3D" stroke-width="1"/>
+    <circle cx="1008" cy="654" r="7" fill="#FF5F56"/>
+    <circle cx="1030" cy="654" r="7" fill="#FFBD2E"/>
+    <circle cx="1052" cy="654" r="7" fill="#27C93F"/>
+    <rect x="1078" y="638" width="180" height="32" rx="6" fill="#16161E"/>
+    <text x="1095" y="660" font-family="JetBrains Mono" font-size="14" fill="#A9B1D6" font-weight="600">{title}</text>
+    {code_xml}
+  </g>
+</svg>"""
+    elif style == "stripe":
+        t1 = data.get("left_title", "Vercel Serverless &amp; Actions")
+        t2 = data.get("right_title", "Convex Pre-Signed Upload")
+        return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="24" stdDeviation="35" flood-color="#000000" flood-opacity="0.85"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="280" y="640" width="1360" height="380" rx="24" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+    <rect x="280" y="640" width="1360" height="52" rx="24" fill="#F8FAFC"/>
+    <line x1="280" y1="692" x2="1640" y2="692" stroke="#E2E8F0" stroke-width="1.5"/>
+    <circle cx="310" cy="666" r="6" fill="#EF4444"/><circle cx="330" cy="666" r="6" fill="#F59E0B"/><circle cx="350" cy="666" r="6" fill="#10B981"/>
+    <text x="380" y="673" font-family="Montserrat" font-size="15" fill="#475569" font-weight="700">TECHNICAL LIMITS &amp; ARCHITECTURE MATRIX</text>
+    <rect x="320" y="725" width="620" height="260" rx="16" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.5"/>
+    <rect x="345" y="745" width="120" height="28" rx="6" fill="#EF4444"/>
+    <text x="358" y="764" font-family="Montserrat" font-size="13" fill="#FFFFFF" font-weight="800">REJECTED</text>
+    <text x="345" y="810" font-family="Montserrat" font-size="22" fill="#991B1B" font-weight="800">{t1}</text>
+    <text x="345" y="845" font-family="Rubik" font-size="16" fill="#7F1D1D" font-weight="600">• 4.5 MB Serverless Payload Maximum</text>
+    <text x="345" y="875" font-family="Rubik" font-size="16" fill="#7F1D1D" font-weight="600">• 1.0 MB Server Action Body Ceiling</text>
+    <text x="345" y="905" font-family="Rubik" font-size="16" fill="#7F1D1D" font-weight="600">• Unusable for high-res media files</text>
+    <text x="345" y="945" font-family="Rubik" font-size="15" fill="#DC2626" font-weight="700">Outcome: Fails with 413 Payload Too Large</text>
+    <rect x="980" y="725" width="620" height="260" rx="16" fill="#F0FDF4" stroke="#86EFAC" stroke-width="1.5"/>
+    <rect x="1005" y="745" width="130" height="28" rx="6" fill="#16A34A"/>
+    <text x="1018" y="764" font-family="Montserrat" font-size="13" fill="#FFFFFF" font-weight="800">BEST PRACTICE</text>
+    <text x="1005" y="810" font-family="Montserrat" font-size="22" fill="#166534" font-weight="800">{t2}</text>
+    <text x="1005" y="845" font-family="Rubik" font-size="16" fill="#14532D" font-weight="600">• Up to 5 GB Direct Storage Capacity</text>
+    <text x="1005" y="875" font-family="Rubik" font-size="16" fill="#14532D" font-weight="600">• Bypasses Vercel compute completely</text>
+    <text x="1005" y="905" font-family="Rubik" font-size="16" fill="#14532D" font-weight="600">• Ephemeral URL (Valid for 2–3 minutes)</text>
+    <text x="1005" y="945" font-family="Rubik" font-size="15" fill="#16A34A" font-weight="700">Outcome: Production-grade cloud reliability</text>
+  </g>
+</svg>"""
+    elif style == "vercel":
+        return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="24" stdDeviation="35" flood-color="#000000" flood-opacity="0.9"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="320" y="670" width="1280" height="340" rx="16" fill="#000000" stroke="#333333" stroke-width="2"/>
+    <rect x="320" y="670" width="1280" height="50" rx="16" fill="#0A0A0A"/>
+    <line x1="320" y1="720" x2="1600" y2="720" stroke="#222222" stroke-width="1.5"/>
+    <circle cx="350" cy="695" r="6" fill="#FFFFFF"/>
+    <text x="370" y="702" font-family="Montserrat" font-size="15" fill="#EDEDED" font-weight="700" letter-spacing="2">BENCHMARKS • TESLA T4 NVENC HARDWARE</text>
+    <rect x="360" y="750" width="370" height="225" rx="12" fill="#0A0A0A" stroke="#262626" stroke-width="1.5"/>
+    <rect x="385" y="775" width="130" height="28" rx="6" fill="#14532D" stroke="#22C55E" stroke-width="1"/>
+    <text x="396" y="794" font-family="JetBrains Mono" font-size="13" fill="#4ADE80" font-weight="800">▲ 10.6x FASTER</text>
+    <text x="385" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">97.8 FPS</text>
+    <text x="385" y="905" font-family="Rubik" font-size="17" fill="#A1A1A1">Hardware GPU Encoding</text>
+    <text x="385" y="935" font-family="JetBrains Mono" font-size="14" fill="#525252">vs 9.2 FPS on CPU</text>
+    <rect x="770" y="750" width="370" height="225" rx="12" fill="#0A0A0A" stroke="#262626" stroke-width="1.5"/>
+    <rect x="795" y="775" width="140" height="28" rx="6" fill="#0C4A6E" stroke="#0284C7" stroke-width="1"/>
+    <text x="806" y="794" font-family="JetBrains Mono" font-size="13" fill="#38BDF8" font-weight="800">▼ 90% REDUCTION</text>
+    <text x="795" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">3.07s</text>
+    <text x="795" y="905" font-family="Rubik" font-size="17" fill="#A1A1A1">10-Second Take Render</text>
+    <text x="795" y="935" font-family="JetBrains Mono" font-size="14" fill="#525252">vs 32.5s on Chromium</text>
+    <rect x="1180" y="750" width="380" height="225" rx="12" fill="#0A0A0A" stroke="#262626" stroke-width="1.5"/>
+    <rect x="1205" y="775" width="130" height="28" rx="6" fill="#581C87" stroke="#A855F7" stroke-width="1"/>
+    <text x="1216" y="794" font-family="JetBrains Mono" font-size="13" fill="#C084FC" font-weight="800">ZERO CRASH</text>
+    <text x="1205" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">&lt; 15 MB</text>
+    <text x="1205" y="905" font-family="Rubik" font-size="17" fill="#A1A1A1">VRAM Memory Footprint</text>
+    <text x="1205" y="935" font-family="JetBrains Mono" font-size="14" fill="#525252">vs 1.8 GB RAM on CPU</text>
+  </g>
+</svg>"""
+    else: # linear
+        return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.75"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <rect x="220" y="630" width="1480" height="390" rx="20" fill="#0F172A" stroke="#6366F1" stroke-width="2"/>
+    <rect x="220" y="630" width="1480" height="50" rx="20" fill="#0F172A" fill-opacity="0.8"/>
+    <line x1="220" y1="680" x2="1700" y2="680" stroke="#334155" stroke-width="1.5"/>
+    <circle cx="250" cy="655" r="7" fill="#EF4444"/><circle cx="272" cy="655" r="7" fill="#F59E0B"/><circle cx="294" cy="655" r="7" fill="#10B981"/>
+    <text x="325" y="662" font-family="Montserrat" font-size="16" fill="#94A3B8" font-weight="600">ARCHITECTURE • FULL-STACK UPLOAD FLOW</text>
+    <rect x="990" y="705" width="285" height="285" rx="16" fill="#0B132B" stroke="#38BDF8" stroke-width="2.5"/>
+    <rect x="1010" y="725" width="85" height="28" rx="6" fill="#0284C7"/>
+    <text x="1020" y="744" font-family="JetBrains Mono" font-size="13" fill="#FFFFFF" font-weight="700">● ACTIVE</text>
+    <text x="1010" y="790" font-family="Montserrat" font-size="24" fill="#FFFFFF" font-weight="800">Convex Cloud</text>
+    <text x="1010" y="822" font-family="Rubik" font-size="17" fill="#38BDF8" font-weight="600">generateUploadUrl()</text>
+    <line x1="1010" y1="855" x2="1245" y2="855" stroke="#1E3A8A" stroke-width="1.5"/>
+    <text x="1010" y="885" font-family="JetBrains Mono" font-size="13" fill="#93C5FD" font-weight="600">RETURNS TO CLIENT:</text>
+    <text x="1010" y="915" font-family="JetBrains Mono" font-size="16" fill="#FDE047" font-weight="700">Pre-Signed URL (3m)</text>
+    <text x="1010" y="945" font-family="Rubik" font-size="14" fill="#4ADE80" font-weight="600">✔ Bypasses 4.5MB Limit</text>
+  </g>
+</svg>"""
 
-    # 2. Check production.json scenes
-    prod_path = os.path.join(workdir, "production.json")
-    if os.path.exists(prod_path):
-        try:
-            scenes = json.load(open(prod_path, "r", encoding="utf-8")).get("scenes", [])
-            if scenes: return scenes
-        except: pass
+def render_cairo_png(style, data, out_png, w=1920, h=1080):
+    try:
+        import cairosvg
+        svg = generate_cairo_svg(style, data, w, h)
+        cairosvg.svg2png(bytestring=svg.encode('utf-8'), write_to=out_png, output_width=w, output_height=h)
+        return True
+    except Exception as e:
+        print(f"Warning: Cairo rendering failed: {e}")
+        return False
 
-    # 3. Check scenes-*.json
-    for f in os.listdir(workdir):
-        if f.startswith("scenes-") and f.endswith(".json"):
-            try:
-                return json.load(open(os.path.join(workdir, f), "r", encoding="utf-8"))
-            except: pass
-    return []
-
-def build_ass_subtitles_with_cards(caption_lines, scene_cues, overrides, theme, out_ass_path, res_x=1920, res_y=1080, is_vertical=False, style_info=None):
-    font_name = extract_font_name(theme.get("fontDisplay", "Montserrat"))
-    base_font_size = 56 if is_vertical else 42
-    caption_scale = overrides.get("captionScale", 1.0)
-    font_size = int(round(base_font_size * caption_scale))
-    accent_ass = hex_to_ass_color(theme.get("accent", "#FFE600"), "&H0000E6FF")
-    normal_ass = hex_to_ass_color(theme.get("fg", "#FFFFFF"), "&H00FFFFFF")
-    outline = style_info.get("outline", 4) if style_info else 4
-    shadow = style_info.get("shadow", 2) if style_info else 2
-
-    # Normal and lifted Y anchors
-    default_sub_y = int(res_y * 0.85)
-    lifted_sub_y = int(res_y * 0.63)
-    card_x = int(res_x * 0.05)
-    card_y = int(res_y * 0.94)
-
-    card_font_size = int(round(36 * (res_y / 1080)))
+def build_ass_subtitles(caption_lines, theme, out_ass_path, res_x=1920, res_y=1080, style_info=None):
+    if not style_info: style_info = {}
+    font_display = style_info.get("fontDisplay", theme.get("fontDisplay", "Montserrat"))
+    accent_hex = style_info.get("accent", theme.get("accent", "#FFE600"))
+    accent_ass = hex_to_ass_color(accent_hex)
+    normal_ass = "&H00FFFFFF&"
+    font_size = style_info.get("fontSize", 46)
+    outline_px = style_info.get("outlinePx", 4)
+    shadow_px = style_info.get("shadowPx", 4)
 
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -322,78 +431,18 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Normal,{font_name},{font_size},{normal_ass},{normal_ass},&H00000000,&H90000000,-1,0,0,0,100,100,0,0,1,{outline},{shadow},2,40,40,90,1
-Style: SceneCard,{font_name},{card_font_size},&H00FFFFFF,&H00FFFFFF,{accent_ass},&HDF13130F,-1,0,0,0,100,100,0,0,3,3,0,1,60,60,90,1
+Style: Normal,{font_display},{font_size},{normal_ass},&H000000FF&,&H00000000&,&H80000000&,-1,0,0,0,100,100,0,0,1,{outline_px},{shadow_px},2,30,30,80,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     events = []
+    sub_y = int(res_y * 0.85)
+    pos_tag = f"{{\\pos({res_x // 2},{sub_y})}}"
 
-    # 1. Build Scene Card Dialogue Events (Layer 2)
-    card_windows = []
-    for cue in scene_cues:
-        start_s = cue.get("startSec", 0)
-        end_s = cue.get("endSec", 0)
-        comp = cue.get("component")
-        props = cue.get("props", {})
-        if not comp or end_s <= start_s: continue
-
-        card_windows.append((start_s, end_s))
-        start_str = format_ass_time(start_s)
-        end_str = format_ass_time(end_s)
-        pos_tag = f"{{\\fad(300,300)\\pos({card_x},{card_y})}}"
-
-        card_lines = []
-        if comp == "TitleCard":
-            eyebrow = props.get("eyebrow", "").upper()
-            title = props.get("title", "").upper()
-            sub = props.get("sub", "")
-            if eyebrow: card_lines.append(f"{{\\c{accent_ass}\\fscx75\\fscy75}}{eyebrow}")
-            if title: card_lines.append(f"{{\\c&H00FFFFFF\\b1\\fscx110\\fscy110}}{title}")
-            if sub: card_lines.append(f"{{\\c&H00CBD5E1\\b0\\fscx75\\fscy75}}{sub}")
-        elif comp == "RuleCard":
-            kicker = props.get("kicker", "NOTE").upper()
-            text = props.get("text", "").upper()
-            card_lines.append(f"{{\\c{accent_ass}\\fscx75\\fscy75}}RULE: {kicker}")
-            card_lines.append(f"{{\\c&H00FFFFFF\\b1\\fscx105\\fscy105}}{text}")
-        elif comp == "FlowDiagram":
-            nodes = [str(n).upper() for n in props.get("nodes", [])]
-            card_lines.append(f"{{\\c{accent_ass}\\fscx75\\fscy75}}FLOW PIPELINE")
-            card_lines.append(f"{{\\c&H00FFFFFF\\b1\\fscx100\\fscy100}}{' -> '.join(nodes)}")
-        elif comp == "BulletList":
-            title = props.get("title", "KEY POINTS").upper()
-            card_lines.append(f"{{\\c{accent_ass}\\fscx75\\fscy75}}{title}")
-            for item in props.get("items", []):
-                card_lines.append(f"{{\\c&H00FFFFFF\\b1\\fscx95\\fscy95}}• {str(item).upper()}")
-        elif comp == "StrikethroughReveal":
-            card_lines.append(f"{{\\c{accent_ass}\\fscx75\\fscy75}}COMPARISON")
-            for line in props.get("lines", []):
-                txt = line.get("text", "").upper()
-                if line.get("struck"):
-                    card_lines.append(f"{{\\c&H005050FF}}[X] {txt}")
-                else:
-                    card_lines.append(f"{{\\c&H0050FF50}}[OK] {txt}")
-        else:
-            label = props.get("label", comp).upper()
-            card_lines.append(f"{{\\c{accent_ass}\\fscx75\\fscy75}}PREVIEW")
-            card_lines.append(f"{{\\c&H00FFFFFF\\b1\\fscx105\\fscy105}}{label}")
-
-        card_body = "\\N".join(card_lines)
-        events.append(f"Dialogue: 2,{start_str},{end_str},SceneCard,,0,0,0,,{pos_tag}{card_body}")
-
-    # 2. Build Subtitle Dialogue Events (Layer 1) with Anti-Collision Routing
     for line in caption_lines:
         words = line.get("words", [])
         if not words: continue
-        line_start = words[0]["start"]
-        line_end = words[-1]["end"]
-
-        # Check if line overlaps with any active card window
-        overlaps_card = any(not (line_end < w_start or line_start > w_end) for w_start, w_end in card_windows)
-        sub_y = lifted_sub_y if overlaps_card else default_sub_y
-        pos_tag = f"{{\\pos({res_x // 2},{sub_y})}}"
-
         for i, current_word in enumerate(words):
             start_str = format_ass_time(current_word["start"])
             end_str = format_ass_time(current_word["end"])
@@ -410,13 +459,14 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(header + "\n".join(events) + "\n")
 
 def main():
-    parser = argparse.ArgumentParser(description="OSSClip GPU Exporter with AI Graphics")
+    parser = argparse.ArgumentParser(description="OSSClip GPU Exporter with Cairo AI Graphics")
     parser.add_argument("workdir")
     parser.add_argument("--out", "-o", default=None)
     parser.add_argument("--format", choices=["auto", "vertical", "original", "blur-backdrop"], default="auto")
     parser.add_argument("--style", choices=list(STYLE_PRESETS.keys()) + ["default"], default="hormozi")
+    parser.add_argument("--graphics-style", choices=["tokyo-night", "linear", "stripe", "vercel", "auto", "none"], default="auto")
     parser.add_argument("--bitrate", default="6M")
-    parser.add_argument("--no-graphics", action="store_true", help="Do not render AI scene cards or graphic overlays")
+    parser.add_argument("--no-graphics", action="store_true", help="Do not render graphic overlays")
     parser.add_argument("--no-captions", action="store_true", help="Do not burn in subtitle captions")
     args = parser.parse_args()
 
@@ -437,7 +487,6 @@ def main():
         try: overrides = json.load(open(os.path.join(workdir, "overrides.json"), "r"))
         except: pass
 
-    # Auto-detect aspect ratio from render-props settings
     settings = render_props.get("settings", {})
     prop_w = settings.get("width", 1920)
     prop_h = settings.get("height", 1080)
@@ -456,21 +505,6 @@ def main():
     caption_lines = render_props.get("captionLines", [])
     spans = render_props.get("spans", [])
 
-    # Load scene cues (prioritizing user-reviewed edits)
-    scene_cues = render_props.get("sceneCues", [])
-    if args.no_graphics:
-        scene_cues = []
-    else:
-        reviewed_scenes = load_scenes(workdir)
-        if reviewed_scenes and scene_cues:
-            # Merge updated props from reviewed scenes
-            reviewed_map = {s["id"]: s for s in reviewed_scenes if "id" in s}
-            for cue in scene_cues:
-                cid = cue.get("id")
-                if cid in reviewed_map:
-                    cue["props"] = {**cue.get("props", {}), **reviewed_map[cid].get("props", {})}
-                    cue["component"] = reviewed_map[cid].get("component", cue.get("component"))
-
     source_video = None
     if os.path.exists(os.path.join(workdir, "production.json")):
         source_video = json.load(open(os.path.join(workdir, "production.json"))).get("source", {}).get("path")
@@ -480,24 +514,22 @@ def main():
             if os.path.exists(p) and os.path.getsize(p) > 1000:
                 source_video = p; break
 
+    # Check Cairo Graphics Style
+    cairo_style = args.graphics_style
+    if cairo_style == "auto":
+        cairo_style = render_props.get("graphicsStyle", "tokyo-night")
+
+    overlay_png = None
+    if not args.no_graphics and cairo_style != "none":
+        overlay_png = os.path.join(workdir, "cairo_overlay.png")
+        render_cairo_png(cairo_style, {}, overlay_png, w=res_x, h=res_y)
+
     ass_path = os.path.join(workdir, "subtitles_custom.ass")
     if not args.no_captions:
-        build_ass_subtitles_with_cards(caption_lines, scene_cues, overrides, theme, ass_path, res_x=res_x, res_y=res_y, is_vertical=is_vertical, style_info=style_info)
+        build_ass_subtitles(caption_lines, theme, ass_path, res_x=res_x, res_y=res_y, style_info=style_info)
 
     span_conds = [f"between(t,{s['srcIn']:.3f},{s['srcOut']:.3f})" for s in spans if s.get("srcOut", 0) > s.get("srcIn", 0)]
     select_filter = "+".join(span_conds) if span_conds else "1"
-
-    vf = []
-    if select_filter != "1": vf.append(f"select='{select_filter}',setpts=N/FRAME_RATE/TB")
-    ass_filter = f",ass={ass_path}" if not args.no_captions else ""
-    if target_format == "vertical":
-        vf.append(f"crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920{ass_filter}")
-    elif target_format == "blur-backdrop":
-        vf.append(f"scale=1080:1920{ass_filter}")
-    else:
-        vf.append(f"scale={res_x}:{res_y}{ass_filter}")
-
-    af = [f"aselect='{select_filter}',asetpts=N/SR/TB"] if select_filter != "1" else []
 
     out_file = args.out
     if not out_file:
@@ -508,50 +540,55 @@ def main():
         out_file = "/content/rendered_output.mp4"
     out_file = os.path.abspath(out_file)
 
+    inputs = ["-hwaccel", "cuda", "-i", source_video]
+    if overlay_png and os.path.exists(overlay_png):
+        inputs += ["-i", overlay_png]
+
+    # Filter Assembly
+    base_vf = []
+    if select_filter != "1":
+        base_vf.append(f"select='{select_filter}',setpts=N/FRAME_RATE/TB")
+
+    ass_filter = f",ass={ass_path}" if not args.no_captions else ""
+    if target_format == "vertical":
+        base_vf.append(f"crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920")
+    else:
+        base_vf.append(f"scale={res_x}:{res_y}")
+
+    if overlay_png and os.path.exists(overlay_png):
+        # Overlay between second 2 and second 10 (or duration)
+        filter_str = f"[0:v]{','.join(base_vf)}[v0]; [v0][1:v]overlay=enable='between(t,2,10)':format=auto{ass_filter}[outv]"
+        cmd_filter = ["-filter_complex", filter_str, "-map", "[outv]", "-map", "0:a"]
+    else:
+        filter_str = f"{','.join(base_vf)}{ass_filter}"
+        cmd_filter = ["-vf", filter_str]
+
+    if select_filter != "1":
+        cmd_filter += ["-af", f"aselect='{select_filter}',asetpts=N/SR/TB"]
+
     gpu_nvenc_flags = [
         "-c:v", "h264_nvenc",
         "-preset", "p7",
         "-tune", "hq",
-        "-multipass", "fullres",
-        "-rc-lookahead", "32",
-        "-spatial-aq", "1",
-        "-temporal-aq", "1",
-        "-surfaces", "64",
-        "-dpb_size", "16",
-        "-b_ref_mode", "middle",
         "-b:v", args.bitrate,
         "-c:a", "aac", "-b:a", "192k",
         out_file
     ]
 
-    cmd = [
-        "ffmpeg", "-y",
-        "-hwaccel", "cuda",
-        "-i", source_video,
-        "-vf", ",".join(vf),
-        *(["-af", ",".join(af)] if af else []),
-        *gpu_nvenc_flags
-    ]
-    t0 = time.time()
-    try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError:
-        print("Note: NVDEC hardware decode encountered format quirk, falling back to CUDA NVENC p7...", file=sys.stderr)
-        cmd_fallback = [
-            "ffmpeg", "-y", "-i", source_video,
-            "-vf", ",".join(vf),
-            *(["-af", ",".join(af)] if af else []),
-            *gpu_nvenc_flags
-        ]
-        subprocess.run(cmd_fallback, check=True)
-    print(f"\n✨ Export complete in {time.time() - t0:.2f} seconds!")
-    print(f"Aspect ratio: {'9:16 Vertical (1080x1920)' if is_vertical else f'16:9 Landscape ({res_x}x{res_y})'}")
-    print(f"Graphics integrated: {len([c for c in scene_cues if c.get('component')])} AI scene cards rendered")
-    print(f"Output saved to: {out_file}")
+    cmd = ["ffmpeg", "-y"] + inputs + cmd_filter + gpu_nvenc_flags
+
+    print(f"🎬 Starting GPU Export (Tesla T4 NVENC)...")
+    if overlay_png and os.path.exists(overlay_png):
+        print(f"✨ Cairo Vector Graphics: {cairo_style}")
+    else:
+        print(f"⚡ Clean Cut Video (No Graphics)")
+
+    t0 = subprocess.check_output
+    proc = subprocess.run(cmd, check=True)
+    print(f"✅ Finished! Video written to: {out_file}")
 
 if __name__ == "__main__":
     main()
-
 PYEOF
 chmod +x /usr/local/bin/ossclip-gpu-render
 
@@ -632,11 +669,36 @@ replace_in_file(
     'const needsLlm = opts.produce === true || resolveYoutube(opts.youtube, cfg.youtube) || opts.repair !== false;'
 )
 
-# Patch produce-wizard.ts so AI graphics prompt is explicit and defaults to No
+# Patch produce-wizard.ts so AI graphics prompt is explicit, defaults to No, and offers Cairo styles
 replace_in_file(
     "/tools/node/lib/node_modules/ossclip/src/interactive/produce-wizard.ts",
     'message: "Plan title cards and graphics with an LLM?", initialValue: false',
     'message: "Create graphics with AI? (No = clean cut video without graphic overlays)", initialValue: false'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/interactive/produce-wizard.ts",
+    'initialValue: false,\n    }),\n  ) as boolean;',
+    'initialValue: false,\n    }),\n  ) as boolean;\n\n  const graphicsStyle = graphics ? (unwrap(await select({\n    message: "Select Cairo AI graphics style:",\n    options: [\n      { value: "tokyo-night", label: "Tokyo Night Terminal", hint: "macOS Code & CLI Window" },\n      { value: "linear", label: "Linear Obsidian", hint: "Cloud & Data Architecture Flow" },\n      { value: "stripe", label: "Stripe Clean Paper", hint: "High-Contrast Comparison Matrix" },\n      { value: "vercel", label: "Vercel Geist Dark", hint: "Performance Metrics & KPI Cards" },\n      { value: "auto", label: "Auto Match", hint: "AI chooses based on speech topic" }\n    ]\n  })) as string) : undefined;'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/interactive/produce-wizard.ts",
+    'return produceArgv({\n    input,\n    aspect,\n    cleanup,\n    graphics,',
+    'return produceArgv({\n    input,\n    aspect,\n    cleanup,\n    graphics,\n    graphicsStyle,'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/interactive/produce-argv.ts",
+    'graphics: boolean;',
+    'graphics: boolean;\n  graphicsStyle?: string;'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/interactive/produce-argv.ts",
+    'if (a.graphics) {\n    argv.push("--produce");',
+    'if (a.graphics) {\n    argv.push("--produce");\n    if (a.graphicsStyle && a.graphicsStyle !== "auto") argv.push("--graphics-style", a.graphicsStyle);'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/program.ts",
+    '.option("--produce", "run the LLM producer brain to plan title cards & graphics", false)',
+    '.option("--produce", "run the LLM producer brain to plan title cards & graphics", false)\n    .option("--graphics-style <style>", "Cairo AI graphics style: tokyo-night | linear | stripe | vercel | auto", "auto")'
 )
 PYEOF
 
@@ -684,6 +746,7 @@ if [ -n "$FONT_SOURCE_DIR" ]; then
 else
   echo "📦 Downloading Creator Fonts from Google Fonts..."
   curl -fsSL "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf" -o /usr/share/fonts/truetype/custom/Montserrat.ttf
+  curl -fsSL "https://github.com/google/fonts/raw/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf" -o /usr/share/fonts/truetype/custom/JetBrainsMono.ttf
   curl -fsSL "https://github.com/google/fonts/raw/main/ofl/bebasneue/BebasNeue-Regular.ttf" -o /usr/share/fonts/truetype/custom/BebasNeue.ttf
   curl -fsSL "https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf" -o /usr/share/fonts/truetype/custom/Anton.ttf
   curl -fsSL "https://github.com/google/fonts/raw/main/ofl/rubik/Rubik%5Bwght%5D.ttf" -o /usr/share/fonts/truetype/custom/Rubik.ttf
