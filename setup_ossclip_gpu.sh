@@ -1720,8 +1720,6 @@ replace_in_file(
       ))}
     </div>'''
 )
-PYEOF
-
 
 # Patch scene-registry.ts to expand altLayouts for all components
 replace_in_file(
@@ -1811,6 +1809,7 @@ replace_in_file(
   • "lower-third": Unobtrusive broadcast graphic in the lower area while speaker remains full screen.
   • "full-bleed": Full-frame video with floating graphic card overlay.'''
 )
+PYEOF
 
 # Create default developer vocabulary dictionary & fast LLM configuration
 mkdir -p /root/.ossclip
