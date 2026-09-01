@@ -12,6 +12,7 @@ Run this single command inside a Google Colab notebook cell:
 !curl -fsSL https://raw.githubusercontent.com/userxvps/ossclip-gpu-setup/main/setup_ossclip_gpu.sh | bash
 ```
 
+> 📊 **GPU Benchmarks & Visual Samples:** See [AI Graphics GPU Benchmark & Visual Evaluation](docs/benchmark/ai_graphics_gpu_benchmark.md) for 100 FPS performance measurements and side-by-side screenshot comparisons.
 
 ---
 
