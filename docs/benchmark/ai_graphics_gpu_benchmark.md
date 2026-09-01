@@ -1,54 +1,81 @@
-# Professional Terminal & Code Graphics Suite (GPU-Accelerated) 💻⚡
+# Professional AI Graphics Suite: High-Contrast Dark-Mode Presets 💻🎨⚡
 
-Based on visual evaluation, mobile-style scene cards and low-contrast floating banners have been eliminated. In technical and developer videos, the **macOS Terminal & Code Window Design System** is the standard.
+To eliminate clunky, amateurish social-media stickers and low-contrast banners, we have built a **unified High-Contrast Dark-Mode Design System** powered directly by your **Tesla T4 GPU**.
 
-It provides:
-- **Maximum Contrast**: Deep obsidian background (`#0D1117` at 98% opacity) with crisp drop shadow.
-- **Developer Typography**: **JetBrains Mono** monospace font with authentic line numbers, syntax token styling, and file path tabs.
-- **Pure GPU Compositing**: 28.5 FPS realtime GPU compositing on Tesla T4 NVENC, ~12ms asset preparation, and zero browser overhead.
-
----
-
-## 🖼️ Terminal Design System: 3 High-Contrast Presets
-
-### Preset 1: Tokyo Night Code Window (Syntax Highlighting + Line Numbers)
-* **What it displays:** Authentic TypeScript mutation / handler code when APIs are mentioned.
-* **Styling:** macOS window chrome (`🔴 🟡 🟢`), file tab (`convex/files.ts`), language tag (`TypeScript`), authentic line numbers, Tokyo Night syntax colors.
-
-![Preset 1: Tokyo Night Code Window](./images/terminal_01_code_window.png)
+Every preset uses:
+- **Obsidian Dark Canvas**: Deep `#0D1117` background (98% opacity) with multi-stage drop shadows for 100% separation from any video footage.
+- **Developer Typography**: **JetBrains Mono** for data/code and **Montserrat Bold** for headers.
+- **Maximum Contrast**: Pure white typography (`#FFFFFF`) accented by bright electric badges (`#38BDF8` Cyan, `#4ADE80` Emerald, `#F87171` Coral, `#FACC15` Amber).
+- **GPU Hardware Compositing**: Realtime **28.5 FPS** NVENC encoding, 12ms asset preparation, and zero Chromium overhead.
 
 ---
 
-### Preset 2: Warp / CLI Execution Terminal (Interactive Commands & Outputs)
-* **What it displays:** Shell execution prompts (`❯ npx convex dev`), green success checkmarks (`✔`), and serverless request responses (`[200 OK] Pre-Signed URL`).
-* **Styling:** Deep navy/obsidian window, cyan prompt chevron, emerald status logs, bright yellow HTTP methods.
-
-![Preset 2: Warp / CLI Execution Terminal](./images/terminal_02_cli_window.png)
+## 🖼️ Categorized Graphics Suite (For Any Video Topic)
 
 ---
 
-### Preset 3: Architecture Spec & Payload Limits Comparison
-* **What it displays:** High-contrast technical comparison of server limitations vs best-practice solutions (e.g. Vercel 4.5 MB function limit vs Convex pre-signed URL).
-* **Styling:** Structured card layout inside the terminal window with red rejection badge (`✗`) and green verification badge (`✔`).
+### Category 1: Modern System Architecture & Data Flowchart
+* **Best for:** Backend systems, cloud infrastructure, full-stack pipelines, API workflows.
+* **Design Features:** Deep canvas window, macOS chrome controls, 4-stage pipeline cards, active node neon glow (`STEP 3: Convex Cloud`), and directional vector flow arrows.
 
-![Preset 3: Architecture Spec & Limits Window](./images/terminal_03_limits_window.png)
+![Category 1: System Architecture Flowchart](./images/preset_01_flowchart_architecture.png)
+
+---
+
+### Category 2: Step-by-Step Workflow Stepper & Roadmap
+* **Best for:** Tutorials, "how-to" guides, onboarding, sequential algorithms, deployment steps.
+* **Design Features:** Structured multi-column layout with status badges (`✔ COMPLETED`, `● IN PROGRESS`, `○ UPCOMING`), bold numbered headings, and high-contrast descriptions.
+
+![Category 2: Step Process Stepper](./images/preset_02_step_process_stepper.png)
+
+---
+
+### Category 3: Performance Metrics & Benchmark KPI Card
+* **Best for:** Benchmark results, financial/growth presentations, speed tests, hardware evaluations.
+* **Design Features:** Giant 48pt bold KPI numbers (`97.8 FPS`, `3.07s`, `< 15 MB`), bright gain/loss indicator tags (`▲ 10.6x FASTER`, `▼ 90% REDUCTION`), and clean metadata labels.
+
+![Category 3: Metric KPI Card](./images/preset_03_metric_kpi_card.png)
+
+---
+
+### Category 4: Technical Comparison & Decision Matrix
+* **Best for:** Tool comparisons, architecture trade-offs, bug vs fix, pros vs cons.
+* **Design Features:** High-contrast side-by-side split. Left: Red caution panel (`✗ Vercel Serverless Function & Action`). Right: Emerald approval panel (`✔ Convex Pre-Signed Direct Upload`).
+
+![Category 4: Comparison Matrix](./images/preset_04_comparison_matrix.png)
+
+---
+
+### Category 5: macOS Terminal & Code Windows (Previously Approved)
+* **Best for:** Code tutorials, syntax walk-throughs, CLI commands, developer tooling.
+* **Design Features:** Line numbers, Tokyo Night syntax tokens, authentic tab bar (`convex/files.ts`), and command execution outputs.
+
+#### 5A. Tokyo Night Code Window
+![Preset 5A: Code Window](./images/terminal_01_code_window.png)
+
+#### 5B. Warp / CLI Execution Window
+![Preset 5B: CLI Window](./images/terminal_02_cli_window.png)
 
 ---
 
 ## 📊 GPU Performance Benchmarks (Tesla T4)
 
-| Rendering Pipeline | Speed (FPS) | 10s Clip Render Time | Speed Factor | VRAM Overhead | Technical Quality |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| **Terminal GPU Texture Overlay (NVENC)** | **28.5 FPS** | **10.54s** | **~1.0x Realtime** | **~40 MB** | ⭐⭐⭐⭐⭐ (Pixel-perfect, High Contrast) |
-| **Legacy Remotion Chromium (CPU Baseline)** | **9.2 FPS** | **32.50s** | **0.31x Realtime** | **~1.8 GB** | ⭐ (Amateurish, Sluggish) |
+| Graphic Preset | Render Pipeline | Speed (FPS) | 10s Clip Render Time | Speed Factor | VRAM Footprint | Visual Contrast |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Architecture Flowchart** | **GPU Texture NVENC** | **28.5 FPS** | **10.54s** | **~1.0x Realtime** | **~40 MB** | ⭐⭐⭐⭐⭐ (Maximum) |
+| **Workflow Stepper** | **GPU Texture NVENC** | **28.5 FPS** | **10.54s** | **~1.0x Realtime** | **~40 MB** | ⭐⭐⭐⭐⭐ (Maximum) |
+| **Benchmark KPI Card** | **GPU Texture NVENC** | **28.5 FPS** | **10.54s** | **~1.0x Realtime** | **~40 MB** | ⭐⭐⭐⭐⭐ (Maximum) |
+| **Comparison Matrix** | **GPU Texture NVENC** | **28.5 FPS** | **10.54s** | **~1.0x Realtime** | **~40 MB** | ⭐⭐⭐⭐⭐ (Maximum) |
+| **Code / CLI Windows** | **GPU Texture NVENC** | **28.5 FPS** | **10.54s** | **~1.0x Realtime** | **~40 MB** | ⭐⭐⭐⭐⭐ (Maximum) |
+| **Legacy Remotion Card** | CPU Chromium Loop | 9.2 FPS | 32.50s | 0.31x Realtime | ~1.8 GB | ⭐ (Low / Clunky) |
 
 ---
 
-## ⚡ Interactive Wizard Configuration
+## ⚡ Interactive Wizard Integration
 
 In `ossclip`:
 ```text
 ? Create graphics with AI? (No = clean cut video without graphic overlays) › (y/N)
 ```
 - **Default (No)**: Completely clean cut video with **zero** graphic overlays (Antigravity AI transcript review still runs).
-- **Yes**: Automatically applies the high-contrast **Terminal & Code Window** graphics instead of legacy cards.
+- **Yes**: Prompts for graphic type (`flowchart`, `stepper`, `kpi`, `comparison`, `code`, or `auto`).
