@@ -1349,6 +1349,16 @@ replace_in_file(
         publicDir: dirname(renderVideo),
         outPath: rawPath,'''
 )
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/produce.ts",
+    '''        },
+      }),
+    );''',
+    '''        },
+      });
+    });'''
+)
+
 
 
 # Patch phonetics.ts to allow labial onsets (e.g. "parcel" -> "Vercel")
