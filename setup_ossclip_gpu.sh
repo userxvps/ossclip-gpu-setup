@@ -261,6 +261,50 @@ STYLE_PRESETS = {
     }
 }
 
+def normalize_layout(layout_str):
+    if not layout_str: return "lower-third"
+    raw = str(layout_str).strip().lower().replace("_", "-").replace(" ", "-")
+    if raw in ["graphic", "graphic-only", "graphiconly", "diagram-only", "graphic only"]:
+        return "graphic-only"
+    if raw in ["blur", "blurred", "blur-behind", "blurred-behind", "blurbehind", "blur behind", "blurred behind"]:
+        return "blurred-behind"
+    if raw in ["pip", "pip-bubble", "pipbubble", "bubble", "pip bubble"]:
+        return "pip-bubble"
+    if raw in ["split-left", "splitleft", "left-split", "split-l", "split left"]:
+        return "split-left"
+    if raw in ["split-right", "splitright", "right-split", "split-r", "split right"]:
+        return "split-right"
+    if raw in ["video-top", "videotop", "top", "video_top", "video top"]:
+        return "video-top"
+    if raw in ["lower-third", "lowerthird", "lower", "lower-3rd", "lower third"]:
+        return "lower-third"
+    if raw in ["full-bleed", "fullbleed", "full", "full bleed"]:
+        return "full-bleed"
+    return raw
+
+def normalize_component(comp_str):
+    if not comp_str: return "TitleCard"
+    raw = str(comp_str).strip().lower().replace("_", "-").replace(" ", "-")
+    if raw in ["title", "titlecard", "title-card", "titiel", "titiel-card", "titielcard", "titiel card", "title card", "hook"]:
+        return "TitleCard"
+    if raw in ["flowchart", "flow-chart", "flow_chart", "flow chart", "flowdiagram", "flow-diagram", "flow_diagram", "flow diagram", "flow", "diagram", "pipeline"]:
+        return "FlowDiagram"
+    if raw in ["stat", "statcard", "stat-card", "stat_card", "stat card", "metric", "kpi", "number"]:
+        return "StatCard"
+    if raw in ["rule", "rulecard", "rule-card", "rule_card", "rule card", "best-practice", "bestpractice", "best practice", "rule"]:
+        return "RuleCard"
+    if raw in ["strike", "strikethrough", "strike-through", "strike_through", "strike through", "strikethroughreveal", "strikethrough-reveal", "comparison", "decision"]:
+        return "StrikethroughReveal"
+    if raw in ["list", "bulletlist", "bullet-list", "bullet_list", "bullet list", "bullets", "enumeration"]:
+        return "BulletList"
+    if raw in ["terminal", "terminalmock", "terminal-mock", "terminal_mock", "terminal mock", "code", "cli", "shell"]:
+        return "TerminalMock"
+    if raw in ["chat", "chatmock", "chat-mock", "chat_mock", "chat mock", "cta", "messages", "conversation"]:
+        return "ChatMock"
+    if raw in ["screenshot", "screenshotframe", "screenshot-frame", "screenshot_frame", "screenshot frame", "browser", "browserframe", "browser-frame", "dashboard"]:
+        return "ScreenshotFrame"
+    return comp_str
+
 def hex_to_ass_color(hex_str):
     if not hex_str: return "&H00FFFFFF&"
     hex_str = hex_str.lstrip('#')
@@ -330,20 +374,29 @@ def get_stage_geometry(layout, is_landscape=True, w=1920, h=1080):
     """
     Implements Remotion stage.ts exact slot math for both landscape and portrait.
     """
+    layout = normalize_layout(layout)
     if layout == "lower-third":
         g = {"x": 0.05, "y": 0.70, "w": 0.62, "h": 0.20} if is_landscape else {"x": 0.04, "y": 0.56, "w": 0.92, "h": 0.22}
         caption_anchor = 0.62 if is_landscape else 0.49
         video_mode = "full"
-    elif layout in ["split-left", "split-right"]:
+    elif layout == "split-left":
         if is_landscape:
-            left = (layout == "split-left")
-            g = {"x": 0.54 if left else 0.06, "y": 0.16, "w": 0.40, "h": 0.64}
+            g = {"x": 0.54, "y": 0.16, "w": 0.40, "h": 0.64}
             caption_anchor = 0.84
-            video_mode = "split-left" if left else "split-right"
+            video_mode = "split-left"
         else:
-            g = {"x": 0.04, "y": 0.56, "w": 0.92, "h": 0.24}
+            g = {"x": 0.04, "y": 0.54, "w": 0.92, "h": 0.24}
             caption_anchor = 0.52
-            video_mode = "video-top"
+            video_mode = "split-left"
+    elif layout == "split-right":
+        if is_landscape:
+            g = {"x": 0.06, "y": 0.16, "w": 0.40, "h": 0.64}
+            caption_anchor = 0.84
+            video_mode = "split-right"
+        else:
+            g = {"x": 0.04, "y": 0.54, "w": 0.92, "h": 0.24}
+            caption_anchor = 0.52
+            video_mode = "split-right"
     elif layout == "video-top":
         g = {"x": 0.08, "y": 0.48, "w": 0.84, "h": 0.40} if is_landscape else {"x": 0.04, "y": 0.52, "w": 0.92, "h": 0.26}
         caption_anchor = 0.84 if is_landscape else 0.48
@@ -355,7 +408,7 @@ def get_stage_geometry(layout, is_landscape=True, w=1920, h=1080):
     elif layout == "pip-bubble":
         g = {"x": 0.06, "y": 0.12, "w": 0.88, "h": 0.48} if is_landscape else {"x": 0.04, "y": 0.14, "w": 0.92, "h": 0.46}
         caption_anchor = 0.78 if is_landscape else 0.65
-        video_mode = "full"
+        video_mode = "pip-bubble"
     elif layout == "blurred-behind":
         g = {"x": 0.08, "y": 0.18, "w": 0.84, "h": 0.52} if is_landscape else {"x": 0.04, "y": 0.22, "w": 0.92, "h": 0.44}
         caption_anchor = 0.82 if is_landscape else 0.69
@@ -381,6 +434,9 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
     font_display = theme.get("fontDisplay", "Montserrat")
     font_mono = theme.get("fontMono", "JetBrains Mono")
     is_landscape = (w > h)
+
+    component = normalize_component(component)
+    layout = normalize_layout(layout)
 
     geom = get_stage_geometry(layout, is_landscape=is_landscape, w=w, h=h)
     box_x, box_y, box_w, box_h = geom["x"], geom["y"], geom["w"], geom["h"]
@@ -697,7 +753,9 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
                 items.append(f'<rect x="{cx}" y="{chip_y}" width="{chip_w}" height="{chip_h}" rx="14" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
                 items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + chip_h//2 + int(node_fsize * 0.35)}" font-family="{font_display}" font-size="{node_fsize}" font-weight="900" fill="{text_color}" text-anchor="middle">{node_str}</text>')
                 if i < n_count - 1:
-                    items.append(f'<text x="{cx + chip_w + arrow_w//2}" y="{chip_y + chip_h//2 + 8}" font-family="{font_display}" font-size="28" font-weight="900" fill="#64748B" text-anchor="middle">→</text>')
+                    ax = cx + chip_w + 14
+                    ay = chip_y + chip_h // 2
+                    items.append(f'<polygon points="{ax},{ay - 7} {ax + 16},{ay} {ax},{ay + 7}" fill="#64748B"/>')
 
         else:
             # Vertical stack (split-left, split-right, portrait, or 5+ nodes)
@@ -726,7 +784,9 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
                 items.append(f'<rect x="{chip_x}" y="{cy}" width="{chip_w}" height="{chip_h}" rx="14" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
                 items.append(f'<text x="{center_x}" y="{cy + chip_h//2 + int(node_fsize * 0.35)}" font-family="{font_display}" font-size="{node_fsize}" font-weight="900" fill="{text_color}" text-anchor="middle">{node_str}</text>')
                 if i < n_count - 1:
-                    items.append(f'<text x="{center_x}" y="{cy + chip_h + arrow_h//2 + 7}" font-family="{font_display}" font-size="22" font-weight="900" fill="#64748B" text-anchor="middle">↓</text>')
+                    ax = center_x
+                    ay = cy + chip_h + 8
+                    items.append(f'<polygon points="{ax - 7},{ay} {ax + 7},{ay} {ax},{ay + 16}" fill="#64748B"/>')
 
         content_svg = "\n".join(items)
 
@@ -768,7 +828,9 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
             curr_ly += int(term_fsize * 1.5)
 
         if fan_out:
-            items.append(f'<text x="{center_x}" y="{start_y + win_h + 30}" font-family="{font_mono}" font-size="18" font-weight="800" fill="{accent}" text-anchor="middle" letter-spacing="2">⌄ {esc(fan_out).upper()}</text>')
+            fan_y = start_y + win_h + 30
+            items.append(f'<polygon points="{center_x - 7},{fan_y - 14} {center_x + 7},{fan_y - 14} {center_x},{fan_y - 4}" fill="{accent}"/>')
+            items.append(f'<text x="{center_x}" y="{fan_y + 14}" font-family="{font_mono}" font-size="18" font-weight="800" fill="{accent}" text-anchor="middle" letter-spacing="2">{esc(fan_out).upper()}</text>')
 
         content_svg = "\n".join(items)
 
@@ -869,8 +931,10 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
             wrapped = wrap_text_to_width(str(itm), inner_w - 80, b_fsize, 0.65)
             for li, wline in enumerate(wrapped):
                 if li == 0:
-                    items.append(f'<text x="{box_x + pad_x + 20}" y="{curr_y}" font-family="{font_display}" font-size="{int(b_fsize * 0.85)}" font-weight="900" fill="{accent}">▸</text>')
-                items.append(f'<text x="{box_x + pad_x + 52}" y="{curr_y}" font-family="{font_display}" font-size="{b_fsize}" font-weight="800" fill="{fg}">{esc(wline).upper()}</text>')
+                    bx = box_x + pad_x + 20
+                    by = curr_y - int(b_fsize * 0.32)
+                    items.append(f'<polygon points="{bx},{by - 7} {bx + 11},{by} {bx},{by + 7}" fill="{accent}"/>')
+                items.append(f'<text x="{box_x + pad_x + 44}" y="{curr_y}" font-family="{font_display}" font-size="{b_fsize}" font-weight="800" fill="{fg}">{esc(wline).upper()}</text>')
                 curr_y += int(b_fsize * 1.25)
             curr_y += 10
 
@@ -1050,6 +1114,7 @@ def main():
     split_right_intervals = []
     video_top_intervals = []
     graphic_only_intervals = []
+    pip_bubble_intervals = []
 
     if not args.no_graphics and args.graphics_style != "none":
         scene_cues = render_props.get("sceneCues", [])
@@ -1067,6 +1132,7 @@ def main():
             if not comp or comp == "None" or (cue.get("kind") == "plain" and not sc_override.get("component")):
                 continue
 
+            comp = normalize_component(comp)
             props = {**cue.get("props", {}), **sc_override.get("props", {})}
             elem_transforms = sc_override.get("elements", {})
             for elem_id, elem_data in elem_transforms.items():
@@ -1085,7 +1151,7 @@ def main():
                 start_t = timing.get("srcStart", timing.get("startSec", start_t))
                 end_t = timing.get("srcEnd", timing.get("endSec", end_t))
 
-            layout = sc_override.get("layout", cue.get("layout", "lower-third"))
+            layout = normalize_layout(sc_override.get("layout", cue.get("layout", "lower-third")))
             geom = get_stage_geometry(layout, is_landscape=is_landscape, w=res_x, h=res_y)
 
             cond = f"between(t,{start_t:.3f},{end_t:.3f})"
@@ -1099,6 +1165,8 @@ def main():
                 video_top_intervals.append(cond)
             elif geom["video_mode"] == "graphic-only":
                 graphic_only_intervals.append(cond)
+            elif geom["video_mode"] == "pip-bubble":
+                pip_bubble_intervals.append(cond)
 
             svg = generate_scene_svg(
                 component=comp,
@@ -1119,6 +1187,7 @@ def main():
                     "start": start_t,
                     "end": end_t,
                     "comp": comp,
+                    "layout": layout,
                     "caption_anchor": geom["caption_anchor"]
                 })
 
@@ -1153,7 +1222,7 @@ def main():
     else:
         base_vf.append(f"scale={res_x}:{res_y}")
 
-    # 2. Dynamic Blur FX
+    # 2. Dynamic Blur FX (Blurred-Behind)
     if blur_intervals:
         blur_enable = "+".join(blur_intervals)
         base_vf.append(f"boxblur=15:1:enable='{blur_enable}'")
@@ -1162,10 +1231,10 @@ def main():
     filter_chains.append(f"[0:v]{','.join(base_vf)}[v_scaled]")
     curr_stage = "v_scaled"
 
-    # 3. Dynamic Video-Top / Portrait Split FX (Video top 42%, dark backdrop bottom)
-    if video_top_intervals and is_vertical:
+    # 3. Dynamic Video-Top FX
+    if video_top_intervals:
         vt_cond = "+".join(video_top_intervals)
-        top_h = 806
+        top_h = 806 if is_vertical else (res_y // 2)
         filter_chains.append(f"[{curr_stage}]split=2[v_norm_vt][v_crop_vt]")
         filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_vt]")
         filter_chains.append(f"[v_crop_vt]crop={res_x}:{top_h}:0:0[v_top_half]")
@@ -1180,36 +1249,67 @@ def main():
         filter_chains.append(f"[{curr_stage}][bg_go]overlay=enable='{go_cond}'[v_stage_go]")
         curr_stage = "v_stage_go"
 
-    # 5. Dynamic Split-Left FX (Landscape: Video left 50%, dark backdrop right 50%)
-    if split_left_intervals and is_landscape:
+    # 5. Dynamic Pip-Bubble FX (Circular video bubble against dark stage)
+    if pip_bubble_intervals:
+        pb_cond = "+".join(pip_bubble_intervals)
+        pip_diam = 340 if is_vertical else 320
+        pip_x = (res_x - pip_diam) // 2 if is_vertical else (res_x - pip_diam - 80)
+        pip_y = 1260 if is_vertical else (res_y - pip_diam - 80)
+        filter_chains.append(f"[{curr_stage}]split=2[v_norm_pb][v_crop_pb]")
+        filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_pb]")
+        filter_chains.append(f"[v_crop_pb]crop='min(iw,ih)':'min(iw,ih)':'(iw-min(iw,ih))/2':'(ih-min(iw,ih))/2',scale={pip_diam}:{pip_diam}[v_pip_box]")
+        filter_chains.append(f"[bg_pb][v_pip_box]overlay=x={pip_x}:y={pip_y}[stage_pb]")
+        filter_chains.append(f"[v_norm_pb][stage_pb]overlay=enable='{pb_cond}'[v_stage_pb]")
+        curr_stage = "v_stage_pb"
+
+    # 6. Dynamic Split-Left FX
+    if split_left_intervals:
         sl_cond = "+".join(split_left_intervals)
-        half_w = res_x // 2
-        filter_chains.append(f"[{curr_stage}]split=2[v_norm_sl][v_crop_sl]")
-        filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_sl]")
-        filter_chains.append(f"[v_crop_sl]crop={half_w}:{res_y}:{half_w // 2}:0[video_half_l]")
-        filter_chains.append(f"[bg_sl][video_half_l]overlay=x=0:y=0[split_canvas_l]")
-        filter_chains.append(f"[v_norm_sl][split_canvas_l]overlay=enable='{sl_cond}'[v_stage_sl]")
-        curr_stage = "v_stage_sl"
+        if is_landscape:
+            half_w = res_x // 2
+            filter_chains.append(f"[{curr_stage}]split=2[v_norm_sl][v_crop_sl]")
+            filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_sl]")
+            filter_chains.append(f"[v_crop_sl]crop={half_w}:{res_y}:{half_w // 2}:0[video_half_l]")
+            filter_chains.append(f"[bg_sl][video_half_l]overlay=x=0:y=0[split_canvas_l]")
+            filter_chains.append(f"[v_norm_sl][split_canvas_l]overlay=enable='{sl_cond}'[v_stage_sl]")
+            curr_stage = "v_stage_sl"
+        else:
+            half_h = res_y // 2
+            filter_chains.append(f"[{curr_stage}]split=2[v_norm_sl][v_crop_sl]")
+            filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_sl]")
+            filter_chains.append(f"[v_crop_sl]crop={res_x}:{half_h}:0:0[video_half_l]")
+            filter_chains.append(f"[bg_sl][video_half_l]overlay=x=0:y=0[split_canvas_l]")
+            filter_chains.append(f"[v_norm_sl][split_canvas_l]overlay=enable='{sl_cond}'[v_stage_sl]")
+            curr_stage = "v_stage_sl"
 
-    # 6. Dynamic Split-Right FX (Landscape: Video right 50%, dark backdrop left 50%)
-    if split_right_intervals and is_landscape:
+    # 7. Dynamic Split-Right FX
+    if split_right_intervals:
         sr_cond = "+".join(split_right_intervals)
-        half_w = res_x // 2
-        filter_chains.append(f"[{curr_stage}]split=2[v_norm_sr][v_crop_sr]")
-        filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_sr]")
-        filter_chains.append(f"[v_crop_sr]crop={half_w}:{res_y}:{half_w // 2}:0[video_half_r]")
-        filter_chains.append(f"[bg_sr][video_half_r]overlay=x={half_w}:y=0[split_canvas_r]")
-        filter_chains.append(f"[v_norm_sr][split_canvas_r]overlay=enable='{sr_cond}'[v_stage_sr]")
-        curr_stage = "v_stage_sr"
+        if is_landscape:
+            half_w = res_x // 2
+            filter_chains.append(f"[{curr_stage}]split=2[v_norm_sr][v_crop_sr]")
+            filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_sr]")
+            filter_chains.append(f"[v_crop_sr]crop={half_w}:{res_y}:{half_w // 2}:0[video_half_r]")
+            filter_chains.append(f"[bg_sr][video_half_r]overlay=x={half_w}:y=0[split_canvas_r]")
+            filter_chains.append(f"[v_norm_sr][split_canvas_r]overlay=enable='{sr_cond}'[v_stage_sr]")
+            curr_stage = "v_stage_sr"
+        else:
+            half_h = res_y // 2
+            filter_chains.append(f"[{curr_stage}]split=2[v_norm_sr][v_crop_sr]")
+            filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_sr]")
+            filter_chains.append(f"[v_crop_sr]crop={res_x}:{half_h}:0:0[video_half_r]")
+            filter_chains.append(f"[bg_sr][video_half_r]overlay=x=0:y=0[split_canvas_r]")
+            filter_chains.append(f"[v_norm_sr][split_canvas_r]overlay=enable='{sr_cond}'[v_stage_sr]")
+            curr_stage = "v_stage_sr"
 
-    # 7. Overlays (Graphic Cards from Cairo)
+    # 8. Overlays (Graphic Cards from Cairo)
     last_v = curr_stage
     for i, g in enumerate(graphic_overlays):
         next_v = f"v_ov_{i}"
         filter_chains.append(f"[{last_v}][{i+1}:v]overlay=enable='between(t,{g['start']},{g['end']})':format=auto[{next_v}]")
         last_v = next_v
 
-    # 8. Burn-in Subtitles with Dynamic Anchors
+    # 9. Burn-in Subtitles with Dynamic Anchors
     ass_filter = f",ass={ass_path}" if not args.no_captions else ""
     filter_chains.append(f"[{last_v}]null{ass_filter}[outv]")
 
@@ -1237,16 +1337,20 @@ def main():
     print(f"🎬 Starting High-Speed Cairo GPU Export (Tesla T4 NVENC with Complete Remotion Layout Parity)...")
     if graphic_overlays:
         print(f"✨ Active Stages ({'Portrait 9:16' if is_vertical else 'Landscape 16:9'}):")
-        if video_top_intervals and is_vertical:
-            print(f"   • Video-Top Stage Active ({len(video_top_intervals)} cues): Video on Top 42%, Dark Stage at Bottom")
+        if video_top_intervals:
+            print(f"   • Video-Top Stage Active ({len(video_top_intervals)} cues): Video on Top, Dark Stage at Bottom")
         if graphic_only_intervals:
             print(f"   • Graphic-Only Stage Active ({len(graphic_only_intervals)} cues): Video hidden, Full Dark Stage")
+        if pip_bubble_intervals:
+            print(f"   • PiP-Bubble Stage Active ({len(pip_bubble_intervals)} cues): Floating Circular Video Bubble + Card")
         if split_left_intervals:
-            print(f"   • Split-Left Stage Active ({len(split_left_intervals)} cues)")
+            print(f"   • Split-Left Stage Active ({len(split_left_intervals)} cues): Video Left/Top, Dark Stage Right/Bottom")
+        if split_right_intervals:
+            print(f"   • Split-Right Stage Active ({len(split_right_intervals)} cues): Video Right/Top, Dark Stage Left/Bottom")
         if blur_intervals:
             print(f"   • Blurred-Behind Stage Active ({len(blur_intervals)} cues): Dynamic Video Blur + Centered Card")
         for idx, g in enumerate(graphic_overlays):
-            print(f"   [{idx+1}] {g['comp']} at {g['start']:.2f}s -> {g['end']:.2f}s (anchor: {g['caption_anchor']})")
+            print(f"   [{idx+1}] {g['comp']} ({g['layout']}) at {g['start']:.2f}s -> {g['end']:.2f}s (anchor: {g['caption_anchor']})")
     else:
         print(f"⚡ Clean Cut Video (No Graphics)")
 
@@ -1255,6 +1359,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 PYEOF
 chmod +x /usr/local/bin/ossclip-gpu-render
 
@@ -1614,6 +1719,96 @@ replace_in_file(
     </div>'''
 )
 PYEOF
+
+
+# Patch scene-registry.ts to expand altLayouts for all components
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/scene-registry.ts",
+    '    defaultLayout: "pip-bubble",\n    altLayouts: [],',
+    '    defaultLayout: "pip-bubble",\n    altLayouts: ["blurred-behind", "lower-third", "split-left", "split-right", "video-top", "graphic-only"],'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/scene-registry.ts",
+    '    defaultLayout: "video-top",\n    altLayouts: ["blurred-behind"],\n    whenToUse: "One striking metric',
+    '    defaultLayout: "video-top",\n    altLayouts: ["blurred-behind", "lower-third", "split-left", "split-right", "graphic-only"],\n    whenToUse: "One striking metric'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/scene-registry.ts",
+    '    defaultLayout: "video-top",\n    altLayouts: ["blurred-behind"],\n    whenToUse:\n      "A prescriptive takeaway',
+    '    defaultLayout: "video-top",\n    altLayouts: ["blurred-behind", "lower-third", "split-left", "split-right", "graphic-only"],\n    whenToUse:\n      "A prescriptive takeaway'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/scene-registry.ts",
+    '    defaultLayout: "blurred-behind",\n    altLayouts: ["graphic-only"],\n    whenToUse:\n      "Negation/contrast beat',
+    '    defaultLayout: "blurred-behind",\n    altLayouts: ["graphic-only", "split-left", "split-right", "lower-third"],\n    whenToUse:\n      "Negation/contrast beat'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/scene-registry.ts",
+    '    defaultLayout: "graphic-only",\n    altLayouts: [],\n    whenToUse: "A causal chain',
+    '    defaultLayout: "graphic-only",\n    altLayouts: ["blurred-behind", "split-left", "split-right", "video-top"],\n    whenToUse: "A causal chain'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/scene-registry.ts",
+    '    defaultLayout: "graphic-only",\n    altLayouts: [],\n    whenToUse: "Anything about running',
+    '    defaultLayout: "graphic-only",\n    altLayouts: ["blurred-behind", "split-left", "split-right"],\n    whenToUse: "Anything about running'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/scene-registry.ts",
+    '    defaultLayout: "video-top",\n    altLayouts: ["blurred-behind"],\n    whenToUse: "Reference to a document',
+    '    defaultLayout: "video-top",\n    altLayouts: ["blurred-behind", "split-left", "split-right", "lower-third"],\n    whenToUse: "Reference to a document'
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/scene-registry.ts",
+    '    defaultLayout: "blurred-behind",\n    altLayouts: ["graphic-only"],\n    whenToUse:\n      "An ENUMERATION',
+    '    defaultLayout: "blurred-behind",\n    altLayouts: ["graphic-only", "split-left", "split-right", "video-top"],\n    whenToUse:\n      "An ENUMERATION'
+)
+
+# Patch framing.ts so all 8 layouts are supported in landscape
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/framing.ts",
+    '''export const LANDSCAPE_LAYOUTS: readonly Layout[] = [
+  "full-bleed",
+  "blurred-behind",
+  "lower-third",
+  "split-left",
+  "split-right",
+];
+
+export function landscapeLayout(layout: Layout): Layout {
+  if (LANDSCAPE_LAYOUTS.includes(layout)) return layout;
+  return layout === "graphic-only" ? "blurred-behind" : "split-left";
+}''',
+    '''export const LANDSCAPE_LAYOUTS: readonly Layout[] = [
+  "full-bleed",
+  "blurred-behind",
+  "lower-third",
+  "split-left",
+  "split-right",
+  "graphic-only",
+  "pip-bubble",
+  "video-top",
+];
+
+export function landscapeLayout(layout: Layout): Layout {
+  if (LANDSCAPE_LAYOUTS.includes(layout)) return layout;
+  return "split-left";
+}'''
+)
+
+# Patch beats.ts for comprehensive layout selection guidance in AI producer prompt
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/core/src/producer/beats.ts",
+    '- VARIETY: never the same component twice in a row, and prefer a component you have NOT used yet in this video — reuse a treatment only when the beat genuinely calls for it. A repeat reads as a template.',
+    '''- VARIETY: never the same component or layout twice in a row, and prefer components and layouts you have NOT used yet in this video — reuse a treatment only when the beat genuinely calls for it. A repeat reads as a template.
+- LAYOUT SELECTION RULES:
+  • "pip-bubble": Speaker's face in a floating circular bubble, graphic/headline prominently above. Best for TitleCard / big hook statement.
+  • "graphic-only": Full visual focus on diagrams, code, architecture, or workflows with video hidden behind stage backdrop. Best for FlowDiagram, TerminalMock.
+  • "blurred-behind": Dynamic background blur with dimmed video behind high-contrast cards. Best for StrikethroughReveal, BulletList, ChatMock, StatCard.
+  • "split-left" / "split-right": Speaker on one side/top and graphic card on the other side/bottom. Great for side-by-side explanations, comparisons, and walkthroughs.
+  • "video-top": Speaker in top portion of frame with punchy card in bottom stage canvas. Best for StatCard, RuleCard, ScreenshotFrame.
+  • "lower-third": Unobtrusive broadcast graphic in the lower area while speaker remains full screen.
+  • "full-bleed": Full-frame video with floating graphic card overlay.'''
+)
 
 # Create default developer vocabulary dictionary & fast LLM configuration
 mkdir -p /root/.ossclip
