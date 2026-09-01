@@ -631,6 +631,13 @@ replace_in_file(
     'const needsLlm = opts.produce === true || resolveYoutube(opts.youtube, cfg.youtube);',
     'const needsLlm = opts.produce === true || resolveYoutube(opts.youtube, cfg.youtube) || opts.repair !== false;'
 )
+
+# Patch produce-wizard.ts so AI graphics prompt is explicit and defaults to No
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/interactive/produce-wizard.ts",
+    'message: "Plan title cards and graphics with an LLM?", initialValue: false',
+    'message: "Create graphics with AI? (No = clean cut video without graphic overlays)", initialValue: false'
+)
 PYEOF
 
 # Create default developer vocabulary dictionary & fast LLM configuration
