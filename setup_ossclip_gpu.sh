@@ -280,7 +280,6 @@ def esc(text):
     return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 def subtract_user_cuts(spans, user_cuts):
-    """Applies cuts made by user in the Web Interface (overrides.cuts)."""
     current_spans = [(s["srcIn"], s["srcOut"]) for s in spans]
     for cut in user_cuts:
         src = cut.get("src")
@@ -296,25 +295,50 @@ def subtract_user_cuts(spans, user_cuts):
         current_spans = new_spans
     return [{"srcIn": s[0], "srcOut": s[1]} for s in current_spans]
 
-def generate_scene_component_svg(component, props, layout="lower-third", theme=None, dx=0, dy=0, scale=1.0, w=1920, h=1080):
-    """Renders the EXACT component displayed in the OSSClip Web Editor with full layout & text edits."""
+def get_stage_geometry(layout, is_landscape=True, w=1920, h=1080):
+    """
+    Implements the exact layout geometry from Remotion's stage.ts
+    """
+    if layout == "lower-third":
+        g = {"x": 0.05, "y": 0.70, "w": 0.62, "h": 0.18} if is_landscape else {"x": 0.04, "y": 0.56, "w": 0.80, "h": 0.22}
+        caption_anchor = 0.62 if is_landscape else 0.49
+        video_blur = False
+    elif layout == "split-left":
+        g = {"x": 0.55, "y": 0.20, "w": 0.40, "h": 0.56} if is_landscape else {"x": 0.04, "y": 0.58, "w": 0.80, "h": 0.20}
+        caption_anchor = 0.82 if is_landscape else 0.53
+        video_blur = False
+    elif layout == "split-right":
+        g = {"x": 0.05, "y": 0.20, "w": 0.40, "h": 0.56} if is_landscape else {"x": 0.04, "y": 0.58, "w": 0.80, "h": 0.20}
+        caption_anchor = 0.82 if is_landscape else 0.53
+        video_blur = False
+    elif layout == "blurred-behind":
+        g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36}
+        caption_anchor = 0.80 if is_landscape else 0.69
+        video_blur = True
+    else: # full-bleed
+        g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36}
+        caption_anchor = 0.80 if is_landscape else 0.70
+        video_blur = False
+
+    return {
+        "x": int(g["x"] * w),
+        "y": int(g["y"] * h),
+        "w": int(g["w"] * w),
+        "h": int(g["h"] * h),
+        "caption_anchor": caption_anchor,
+        "video_blur": video_blur
+    }
+
+def generate_scene_svg_remotion_spec(component, props, layout="lower-third", theme=None, dx=0, dy=0, scale=1.0, w=1920, h=1080):
+    """Renders the EXACT scene component respecting Remotion's stage.ts geometry & layout slots."""
     if not theme: theme = {}
     accent = theme.get("accent", "#FFE600")
     fg = theme.get("fg", "#FFFFFF")
-    card_bg = theme.get("cardBg", "#0F172A")
-    card_border = theme.get("cardBorder", "#334155")
     font_display = theme.get("fontDisplay", "Montserrat")
     font_mono = theme.get("fontMono", "JetBrains Mono")
 
-    # Placement based on Web Editor layout mode
-    if layout == "split-left":
-        box_x, box_y, box_w, box_h = 100, 260, 800, 560
-    elif layout == "split-right":
-        box_x, box_y, box_w, box_h = 1020, 260, 800, 560
-    elif layout in ["blurred-behind", "full-bleed"]:
-        box_x, box_y, box_w, box_h = 240, 620, 1440, 380
-    else: # lower-third
-        box_x, box_y, box_w, box_h = 240, 660, 1440, 340
+    geom = get_stage_geometry(layout, is_landscape=(w > h), w=w, h=h)
+    box_x, box_y, box_w, box_h = geom["x"], geom["y"], geom["w"], geom["h"]
 
     transform_attr = f'transform="translate({dx}, {dy}) scale({scale})"' if (dx != 0 or dy != 0 or scale != 1.0) else ''
     content_svg = ""
@@ -325,20 +349,33 @@ def generate_scene_component_svg(component, props, layout="lower-third", theme=N
         sub = esc(props.get("sub", ""))
         emphasis = esc(props.get("emphasis", ""))
 
-        items = []
-        curr_y = box_y + 80
-        if eyebrow:
-            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="28" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">{eyebrow.upper()}</text>')
-            curr_y += 75
-        if emphasis:
-            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="110" font-weight="900" fill="{accent}" text-anchor="middle">{emphasis}</text>')
-            curr_y += 100
-        if title:
-            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="64" font-weight="900" fill="{fg}" text-anchor="middle">{title.upper()}</text>')
-            curr_y += 65
-        if sub and sub.lower() != title.lower():
-            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="30" font-weight="600" fill="#CBD5E1" text-anchor="middle">{sub}</text>')
-        content_svg = "\n".join(items)
+        if layout == "lower-third":
+            # Broadcast lower-third banner
+            items = []
+            curr_y = box_y + 42
+            if eyebrow:
+                items.append(f'<text x="{box_x + 36}" y="{curr_y}" font-family="{font_display}" font-size="17" font-weight="700" fill="#94A3B8" letter-spacing="3">{eyebrow.upper()}</text>')
+                curr_y += 48
+            else:
+                curr_y += 20
+            items.append(f'<text x="{box_x + 36}" y="{curr_y}" font-family="{font_display}" font-size="42" font-weight="900" fill="{fg}">{title.upper()}</text>')
+            if sub and sub.lower() != title.lower():
+                items.append(f'<text x="{box_x + 36}" y="{curr_y + 38}" font-family="{font_display}" font-size="20" font-weight="600" fill="#A0AEC0">{sub}</text>')
+            content_svg = "\n".join(items)
+        else:
+            # Vertical card (split-left / blurred-behind)
+            items = []
+            curr_y = box_y + 90
+            if eyebrow:
+                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="24" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">{eyebrow.upper()}</text>')
+                curr_y += 80
+            if emphasis:
+                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="96" font-weight="900" fill="{accent}" text-anchor="middle">{emphasis}</text>')
+                curr_y += 90
+            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="52" font-weight="900" fill="{fg}" text-anchor="middle">{title.upper()}</text>')
+            if sub and sub.lower() != title.lower():
+                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y + 55}" font-family="{font_display}" font-size="24" font-weight="600" fill="#CBD5E1" text-anchor="middle">{sub}</text>')
+            content_svg = "\n".join(items)
 
     elif component == "FlowDiagram":
         nodes = props.get("nodes", [])
@@ -350,7 +387,7 @@ def generate_scene_component_svg(component, props, layout="lower-third", theme=N
         chip_y = box_y + box_h // 2 - 45
 
         items = [
-            f'<text x="{box_x + 60}" y="{box_y + 65}" font-family="{font_display}" font-size="22" font-weight="700" fill="#94A3B8" letter-spacing="2">ARCHITECTURE FLOW</text>'
+            f'<text x="{box_x + 60}" y="{box_y + 65}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" letter-spacing="2">ARCHITECTURE PIPELINE</text>'
         ]
         for i, node in enumerate(nodes):
             cx = start_x + i * (chip_w + 70)
@@ -360,10 +397,10 @@ def generate_scene_component_svg(component, props, layout="lower-third", theme=N
             border_color = accent if is_emph else "#475569"
 
             items.append(f'<rect x="{cx}" y="{chip_y}" width="{chip_w}" height="90" rx="16" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
-            items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + 55}" font-family="{font_display}" font-size="22" font-weight="800" fill="{text_color}" text-anchor="middle">{esc(node).upper()}</text>')
+            items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + 55}" font-family="{font_display}" font-size="20" font-weight="800" fill="{text_color}" text-anchor="middle">{esc(node).upper()}</text>')
 
             if i < n_count - 1:
-                items.append(f'<text x="{cx + chip_w + 35}" y="{chip_y + 55}" font-family="{font_display}" font-size="36" font-weight="900" fill="#64748B" text-anchor="middle">→</text>')
+                items.append(f'<text x="{cx + chip_w + 35}" y="{chip_y + 55}" font-family="{font_display}" font-size="34" font-weight="900" fill="#64748B" text-anchor="middle">→</text>')
         content_svg = "\n".join(items)
 
     elif component == "StatCard":
@@ -371,18 +408,27 @@ def generate_scene_component_svg(component, props, layout="lower-third", theme=N
         value = esc(props.get("value", "0"))
         caption = esc(props.get("caption", ""))
 
-        items = [
-            f'<text x="{box_x + 80}" y="{box_y + 130}" font-family="{font_display}" font-size="44" font-weight="800" fill="#94A3B8" letter-spacing="2">{label.upper()}</text>',
-            f'<text x="{box_x + box_w - 80}" y="{box_y + 190}" font-family="{font_display}" font-size="110" font-weight="900" fill="{accent}" text-anchor="end">{value}</text>'
-        ]
-        if caption:
-            items.append(f'<text x="{box_x + 80}" y="{box_y + 240}" font-family="{font_display}" font-size="28" font-weight="600" fill="#CBD5E1">{caption}</text>')
-        content_svg = "\n".join(items)
+        if layout == "lower-third":
+            items = [
+                f'<text x="{box_x + 50}" y="{box_y + 75}" font-family="{font_display}" font-size="28" font-weight="800" fill="#94A3B8" letter-spacing="2">{label.upper()}</text>',
+                f'<text x="{box_x + box_w - 60}" y="{box_y + 115}" font-family="{font_display}" font-size="74" font-weight="900" fill="{accent}" text-anchor="end">{value}</text>'
+            ]
+            if caption:
+                items.append(f'<text x="{box_x + 50}" y="{box_y + 135}" font-family="{font_display}" font-size="20" font-weight="600" fill="#CBD5E1">{caption}</text>')
+            content_svg = "\n".join(items)
+        else:
+            items = [
+                f'<text x="{box_x + 60}" y="{box_y + 100}" font-family="{font_display}" font-size="36" font-weight="800" fill="#94A3B8" letter-spacing="2">{label.upper()}</text>',
+                f'<text x="{box_x + box_w - 60}" y="{box_y + 170}" font-family="{font_display}" font-size="100" font-weight="900" fill="{accent}" text-anchor="end">{value}</text>'
+            ]
+            if caption:
+                items.append(f'<text x="{box_x + 60}" y="{box_y + 230}" font-family="{font_display}" font-size="26" font-weight="600" fill="#CBD5E1">{caption}</text>')
+            content_svg = "\n".join(items)
 
     elif component == "StrikethroughReveal":
         lines = props.get("lines", [])
         items = [
-            f'<text x="{box_x + 60}" y="{box_y + 65}" font-family="{font_display}" font-size="22" font-weight="700" fill="#94A3B8" letter-spacing="2">COMPARISON &amp; DECISION</text>'
+            f'<text x="{box_x + 60}" y="{box_y + 65}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" letter-spacing="2">DECISION &amp; BEST PRACTICE</text>'
         ]
         curr_y = box_y + 140
         for i, l in enumerate(lines):
@@ -392,64 +438,31 @@ def generate_scene_component_svg(component, props, layout="lower-third", theme=N
 
             mark_svg = ""
             if mark == "cross":
-                mark_svg = f'<text x="{box_x + 80}" y="{curr_y}" font-family="{font_display}" font-size="38" font-weight="900" fill="#EF4444">✗</text>'
+                mark_svg = f'<text x="{box_x + 70}" y="{curr_y}" font-family="{font_display}" font-size="36" font-weight="900" fill="#EF4444">✗</text>'
             elif mark == "check":
-                mark_svg = f'<text x="{box_x + 80}" y="{curr_y}" font-family="{font_display}" font-size="38" font-weight="900" fill="#10B981">✓</text>'
+                mark_svg = f'<text x="{box_x + 70}" y="{curr_y}" font-family="{font_display}" font-size="36" font-weight="900" fill="#10B981">✓</text>'
 
             text_color = "#64748B" if struck else "#FFFFFF"
             items.append(mark_svg)
-            items.append(f'<text x="{box_x + 130}" y="{curr_y}" font-family="{font_display}" font-size="38" font-weight="800" fill="{text_color}">{text.upper()}</text>')
+            items.append(f'<text x="{box_x + 120}" y="{curr_y}" font-family="{font_display}" font-size="34" font-weight="800" fill="{text_color}">{text.upper()}</text>')
 
             if struck:
-                approx_w = len(text) * 24
-                items.append(f'<line x1="{box_x + 125}" y1="{curr_y - 12}" x2="{box_x + 135 + approx_w}" y2="{curr_y - 12}" stroke="#EF4444" stroke-width="4"/>')
+                approx_w = len(text) * 22
+                items.append(f'<line x1="{box_x + 115}" y1="{curr_y - 12}" x2="{box_x + 125 + approx_w}" y2="{curr_y - 12}" stroke="#EF4444" stroke-width="4"/>')
             curr_y += 75
         content_svg = "\n".join(items)
 
     elif component in ["ScreenshotFrame", "BrowserFrame"]:
         label = esc(props.get("label", "DASHBOARD"))
         items = [
-            f'<rect x="{box_x + 40}" y="{box_y + 40}" width="{box_w - 80}" height="44" rx="8" fill="#1E293B"/>',
-            f'<circle cx="{box_x + 70}" cy="{box_y + 62}" r="6" fill="#EF4444"/>',
-            f'<circle cx="{box_x + 90}" cy="{box_y + 62}" r="6" fill="#F59E0B"/>',
-            f'<circle cx="{box_x + 110}" cy="{box_y + 62}" r="6" fill="#10B981"/>',
-            f'<text x="{box_x + 140}" y="{box_y + 69}" font-family="{font_mono}" font-size="16" fill="#94A3B8">{label.upper()}</text>',
-            f'<rect x="{box_x + 40}" y="{box_y + 100}" width="{box_w - 80}" height="{box_h - 140}" rx="12" fill="#0B132B" stroke="#1E293B" stroke-width="2"/>',
-            f'<text x="{box_x + box_w//2}" y="{box_y + box_h//2}" font-family="{font_display}" font-size="36" font-weight="800" fill="{accent}" text-anchor="middle">LIVE DEMO • {label}</text>'
+            f'<rect x="{box_x + 30}" y="{box_y + 30}" width="{box_w - 60}" height="42" rx="8" fill="#1E293B"/>',
+            f'<circle cx="{box_x + 55}" cy="{box_y + 51}" r="6" fill="#EF4444"/>',
+            f'<circle cx="{box_x + 75}" cy="{box_y + 51}" r="6" fill="#F59E0B"/>',
+            f'<circle cx="{box_x + 95}" cy="{box_y + 51}" r="6" fill="#10B981"/>',
+            f'<text x="{box_x + 125}" y="{box_y + 57}" font-family="{font_mono}" font-size="15" fill="#94A3B8">{label.upper()}</text>',
+            f'<rect x="{box_x + 30}" y="{box_y + 85}" width="{box_w - 60}" height="{box_h - 115}" rx="12" fill="#0B132B" stroke="#1E293B" stroke-width="2"/>',
+            f'<text x="{box_x + box_w//2}" y="{box_y + box_h//2 + 20}" font-family="{font_display}" font-size="32" font-weight="800" fill="{accent}" text-anchor="middle">LIVE DEMO • {label}</text>'
         ]
-        content_svg = "\n".join(items)
-
-    elif component in ["TerminalMock", "terminal", "tokyo-night"]:
-        title = esc(props.get("title", "convex/files.ts"))
-        lines = props.get("lines", [
-            'import { mutation } from "./_generated/server";',
-            'export const generateUploadUrl = mutation({',
-            '  handler: async (ctx) => await ctx.storage.generateUploadUrl()',
-            '});'
-        ])
-        items = [
-            f'<rect x="{box_x}" y="{box_y}" width="{box_w}" height="48" rx="20" fill="#1E293B"/>',
-            f'<circle cx="{box_x + 30}" cy="{box_y + 24}" r="6" fill="#EF4444"/>',
-            f'<circle cx="{box_x + 50}" cy="{box_y + 24}" r="6" fill="#F59E0B"/>',
-            f'<circle cx="{box_x + 70}" cy="{box_y + 24}" r="6" fill="#10B981"/>',
-            f'<text x="{box_x + 100}" y="{box_y + 30}" font-family="{font_mono}" font-size="15" fill="#94A3B8">{title}</text>'
-        ]
-        for i, l in enumerate(lines[:7]):
-            line_no = f"{i+1:02d}"
-            escaped = esc(l)
-            items.append(f'<text x="{box_x + 40}" y="{box_y + 90 + i*36}" font-family="{font_mono}" font-size="18" fill="#475569">{line_no}</text>')
-            items.append(f'<text x="{box_x + 85}" y="{box_y + 90 + i*36}" font-family="{font_mono}" font-size="18" fill="#C0CAF5">{escaped}</text>')
-        content_svg = "\n".join(items)
-
-    elif component == "BulletList":
-        heading = esc(props.get("heading", "KEY POINTS"))
-        items_list = props.get("items", [])
-        items = [
-            f'<text x="{box_x + 60}" y="{box_y + 70}" font-family="{font_display}" font-size="32" font-weight="900" fill="{accent}">{heading.upper()}</text>'
-        ]
-        for i, item in enumerate(items_list[:4]):
-            items.append(f'<circle cx="{box_x + 80}" cy="{box_y + 130 + i*55}" r="7" fill="{accent}"/>')
-            items.append(f'<text x="{box_x + 110}" y="{box_y + 137 + i*55}" font-family="{font_display}" font-size="28" font-weight="700" fill="#FFFFFF">{esc(item)}</text>')
         content_svg = "\n".join(items)
 
     else:
@@ -459,16 +472,16 @@ def generate_scene_component_svg(component, props, layout="lower-third", theme=N
     return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#000000" flood-opacity="0.85"/>
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.85"/>
     </filter>
   </defs>
   <g {transform_attr} filter="url(#shadow)">
-    <rect x="{box_x}" y="{box_y}" width="{box_w}" height="{box_h}" rx="24" fill="{card_bg}" stroke="{card_border}" stroke-width="2"/>
+    <rect x="{box_x}" y="{box_y}" width="{box_w}" height="{box_h}" rx="20" fill="#0F172A" fill-opacity="0.9" stroke="#334155" stroke-width="2"/>
     {content_svg}
   </g>
 </svg>"""
 
-def render_cairo_png_from_svg(svg_str, out_png, w=1920, h=1080):
+def render_cairo_png(svg_str, out_png, w=1920, h=1080):
     try:
         import cairosvg
         cairosvg.svg2png(bytestring=svg_str.encode('utf-8'), write_to=out_png, output_width=w, output_height=h)
@@ -477,7 +490,11 @@ def render_cairo_png_from_svg(svg_str, out_png, w=1920, h=1080):
         print(f"Warning: Cairo rendering failed: {e}")
         return False
 
-def build_ass_subtitles(caption_lines, theme, out_ass_path, res_x=1920, res_y=1080, style_info=None):
+def build_ass_subtitles_with_layout_anchors(caption_lines, cues, theme, out_ass_path, res_x=1920, res_y=1080, style_info=None):
+    """
+    Dynamically positions subtitles based on Remotion's stage.ts captionAnchor for each active scene.
+    Prevents subtitles from ever colliding with lower-third banners or split-screens!
+    """
     if not style_info: style_info = {}
     font_display = theme.get("fontDisplay", style_info.get("fontDisplay", "Montserrat"))
     font_display = font_display.replace("'", "").replace('"', '').split(',')[0].strip()
@@ -487,6 +504,9 @@ def build_ass_subtitles(caption_lines, theme, out_ass_path, res_x=1920, res_y=10
     font_size = style_info.get("fontSize", 46)
     outline_px = style_info.get("outlinePx", 4)
     shadow_px = style_info.get("shadowPx", 4)
+
+    is_landscape = (res_x > res_y)
+    default_anchor = 0.80 if is_landscape else 0.70
 
     header = f"""[Script Info]
 ScriptType: v4.00+
@@ -502,15 +522,26 @@ Style: Normal,{font_display},{font_size},{normal_ass},&H000000FF&,&H00000000&,&H
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     events = []
-    sub_y = int(res_y * 0.85)
-    pos_tag = f"{{\\pos({res_x // 2},{sub_y})}}"
 
     for line in caption_lines:
         words = line.get("words", [])
         if not words: continue
         for i, current_word in enumerate(words):
-            start_str = format_ass_time(current_word["start"])
-            end_str = format_ass_time(current_word["end"])
+            start_t = current_word["start"]
+            end_t = current_word["end"]
+            start_str = format_ass_time(start_t)
+            end_str = format_ass_time(end_t)
+
+            # Find active layout anchor at this timestamp from stage.ts
+            active_anchor = default_anchor
+            for c in cues:
+                if c["start"] <= start_t <= c["end"]:
+                    active_anchor = c.get("caption_anchor", default_anchor)
+                    break
+
+            sub_y = int(active_anchor * res_y)
+            pos_tag = f"{{\\pos({res_x // 2},{sub_y})}}"
+
             parts = []
             for j, w in enumerate(words):
                 txt = w["text"].upper()
@@ -524,7 +555,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(header + "\n".join(events) + "\n")
 
 def main():
-    parser = argparse.ArgumentParser(description="OSSClip GPU Exporter with Multi-Graphic Cairo & Web Editor Sync")
+    parser = argparse.ArgumentParser(description="OSSClip High-Speed GPU Exporter with Full Remotion Layout Parity")
     parser.add_argument("workdir")
     parser.add_argument("--out", "-o", default=None)
     parser.add_argument("--format", choices=["auto", "vertical", "original", "blur-backdrop"], default="auto")
@@ -552,7 +583,6 @@ def main():
         try: overrides = json.load(open(os.path.join(workdir, "overrides.json"), "r"))
         except: pass
 
-    # Use /dev/shm (Shared RAM) for intermediate vector assets to eliminate disk I/O
     shm_dir = "/dev/shm" if os.path.exists("/dev/shm") else workdir
 
     settings = render_props.get("settings", {})
@@ -567,15 +597,14 @@ def main():
     is_vertical = target_format in ["vertical", "blur-backdrop"]
     res_x = 1080 if is_vertical else prop_w
     res_y = 1920 if is_vertical else prop_h
+    is_landscape = (res_x > res_y)
 
-    # Merge Theme: Base -> Preset -> Overrides from Web Editor
     style_info = STYLE_PRESETS.get(args.style, {})
     theme = {**render_props.get("theme", {}), **style_info, **overrides.get("theme", {})}
 
     if overrides.get("captionsHidden") is True:
         args.no_captions = True
 
-    # 1. Apply Web Editor Retypes & Word Hides to Caption Lines
     caption_lines = render_props.get("captionLines", [])
     caption_edits = overrides.get("captions", {})
     hidden_words = overrides.get("captionWordsHidden", {})
@@ -592,7 +621,6 @@ def main():
             kept_words.append(w)
         line["words"] = kept_words
 
-    # 2. Apply Web Editor Cuts to Spans
     spans = render_props.get("spans", [])
     user_cuts = overrides.get("cuts", [])
     if user_cuts:
@@ -607,8 +635,9 @@ def main():
             if os.path.exists(p) and os.path.getsize(p) > 1000:
                 source_video = p; break
 
-    # 3. IDENTICAL GRAPHICS: Render the EXACT sceneCues displayed in the Web Editor
     graphic_overlays = []
+    blur_intervals = []
+
     if not args.no_graphics and args.graphics_style != "none":
         scene_cues = render_props.get("sceneCues", [])
         scene_overrides = overrides.get("scenes", {})
@@ -622,21 +651,16 @@ def main():
             cue_id = cue.get("id", f"scene-{idx}")
             sc_override = scene_overrides.get(cue_id, {}) or scene_overrides.get(f"scene-{idx}", {})
 
-            # Skip if user hid this graphic in the editor
             if sc_override.get("hidden") is True:
                 continue
 
-            # Merge all user text edits (props)
             props = {**cue.get("props", {}), **sc_override.get("props", {})}
-
-            # Extract user positioning & scale edits (dx, dy, scale)
             elem_transforms = sc_override.get("elements", {})
             card_transform = elem_transforms.get("card", {}) or elem_transforms.get("root", {})
             dx = card_transform.get("dx", 0)
             dy = card_transform.get("dy", 0)
             scale = card_transform.get("scale", 1.0)
 
-            # Timing: honors manual timeline nudges / pins
             start_t = cue.get("startSec", 0)
             end_t = cue.get("endSec", start_t + 5)
             if sc_override.get("timing"):
@@ -645,8 +669,12 @@ def main():
                 end_t = timing.get("srcEnd", timing.get("endSec", end_t))
 
             layout = sc_override.get("layout", cue.get("layout", "lower-third"))
+            geom = get_stage_geometry(layout, is_landscape=is_landscape, w=res_x, h=res_y)
 
-            svg = generate_scene_component_svg(
+            if geom["video_blur"]:
+                blur_intervals.append(f"between(t,{start_t:.3f},{end_t:.3f})")
+
+            svg = generate_scene_svg_remotion_spec(
                 component=comp,
                 props=props,
                 layout=layout,
@@ -659,17 +687,18 @@ def main():
             )
 
             png_path = os.path.join(shm_dir, f"editor_overlay_{idx}_{pid}.png")
-            if render_cairo_png_from_svg(svg, png_path, w=res_x, h=res_y):
+            if render_cairo_png(svg, png_path, w=res_x, h=res_y):
                 graphic_overlays.append({
                     "path": png_path,
                     "start": start_t,
                     "end": end_t,
-                    "comp": comp
+                    "comp": comp,
+                    "caption_anchor": geom["caption_anchor"]
                 })
 
     ass_path = os.path.join(shm_dir, f"subtitles_custom_{os.getpid()}.ass")
     if not args.no_captions:
-        build_ass_subtitles(caption_lines, theme, ass_path, res_x=res_x, res_y=res_y, style_info=style_info)
+        build_ass_subtitles_with_layout_anchors(caption_lines, graphic_overlays, theme, ass_path, res_x=res_x, res_y=res_y, style_info=style_info)
 
     span_conds = [f"between(t,{s['srcIn']:.3f},{s['srcOut']:.3f})" for s in spans if s.get("srcOut", 0) > s.get("srcIn", 0)]
     select_filter = "+".join(span_conds) if span_conds else "1"
@@ -691,11 +720,18 @@ def main():
     if select_filter != "1":
         base_vf.append(f"select='{select_filter}',setpts=N/FRAME_RATE/TB")
 
-    ass_filter = f",ass={ass_path}" if not args.no_captions else ""
     if target_format == "vertical":
         base_vf.append(f"crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920")
     else:
         base_vf.append(f"scale={res_x}:{res_y}")
+
+    # Apply video blur dynamically during blurred-behind scenes
+    if blur_intervals:
+        blur_enable = "+".join(blur_intervals)
+        base_vf.append(f"boxblur=15:1:enable='{blur_enable}'")
+        base_vf.append(f"eq=brightness=-0.12:enable='{blur_enable}'")
+
+    ass_filter = f",ass={ass_path}" if not args.no_captions else ""
 
     if graphic_overlays:
         filter_parts = [f"[0:v]{','.join(base_vf)}[v0]"]
@@ -727,11 +763,11 @@ def main():
 
     cmd = ["ffmpeg", "-y"] + inputs + cmd_filter + gpu_nvenc_flags
 
-    print(f"🎬 Starting GPU Export (Tesla T4 NVENC)...")
+    print(f"🎬 Starting High-Speed Cairo GPU Export (Tesla T4 NVENC with Full Remotion Layout Parity)...")
     if graphic_overlays:
-        print(f"✨ Rendering EXACT Web Editor Components ({len(graphic_overlays)} graphics):")
+        print(f"✨ Rendering {len(graphic_overlays)} Remotion-Spec Components with Dynamic Subtitle Anchors:")
         for idx, g in enumerate(graphic_overlays):
-            print(f"   [{idx+1}] {g['comp']} at {g['start']:.2f}s -> {g['end']:.2f}s")
+            print(f"   [{idx+1}] {g['comp']} at {g['start']:.2f}s -> {g['end']:.2f}s (Subtitle Anchor Y: {int(g['caption_anchor']*res_y)}px)")
     else:
         print(f"⚡ Clean Cut Video (No Graphics)")
 
@@ -769,7 +805,19 @@ replace_in_file(
     '"-c:v", "h264_nvenc", "-preset", "p4", "-cq", "18",'
 )
 
-# Web Editor uses official default Remotion engine with full layout & graphic fidelity
+# Patch edit.ts to wire UI Render button to GPU exporter with Remotion layout parity
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/edit.ts",
+    'const child = spawn(cmd.execPath, [...cmd.execArgv, cmd.script, ...args], {',
+    '''let spawnBinary = cmd.execPath;
+          let spawnArgs = [...cmd.execArgv, cmd.script, ...args];
+          if (existsSync("/usr/local/bin/ossclip-gpu-render")) {
+            const outPath = customOut ?? cmd.out ?? "/content/rendered_output.mp4";
+            spawnBinary = "/usr/local/bin/ossclip-gpu-render";
+            spawnArgs = [workdir!, "--format", "auto", "--out", outPath];
+          }
+          const child = spawn(spawnBinary, spawnArgs, {'''
+)
 
 # Patch phonetics.ts to allow labial onsets (e.g. "parcel" -> "Vercel")
 replace_in_file(
