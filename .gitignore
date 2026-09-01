@@ -1,0 +1,23 @@
+# Ignore media and temporary outputs
+*.mp4
+*.wav
+*.mp3
+*.mkv
+*.mov
+*.fcpxml
+*.xml
+*.edl
+*.log
+*.tmp
+*.bin
+
+# Ignore OSSClip project runs
+.ossclip/
+sample_data/
+node_modules/
+__pycache__/
+*.pyc
+
+# Ignore environment credentials and OS files
+.DS_Store
+.env
