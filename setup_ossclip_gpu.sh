@@ -292,9 +292,14 @@ def subtract_user_cuts(spans, user_cuts):
     return [{"srcIn": s[0], "srcOut": s[1]} for s in current_spans]
 
 def generate_cairo_svg(style, data, w=1920, h=1080):
-    """Generates razor-sharp HD vector SVG in the requested style with user data."""
+    """Generates razor-sharp HD vector SVG in the requested style with user layout and text edits."""
+    dx = data.get("dx", 0)
+    dy = data.get("dy", 0)
+    scale = data.get("scale", 1.0)
+    transform_attr = f'transform="translate({dx}, {dy}) scale({scale})"' if (dx != 0 or dy != 0 or scale != 1.0) else ''
+
     if style == "tokyo-night":
-        title = data.get("title", "convex/files.ts")
+        title = str(data.get("title", "convex/files.ts")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         lines = data.get("lines", [
             'import { mutation } from "./_generated/server";',
             '',
@@ -318,7 +323,7 @@ def generate_cairo_svg(style, data, w=1920, h=1080):
       <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#000000" flood-opacity="0.85"/>
     </filter>
   </defs>
-  <g filter="url(#shadow)">
+  <g {transform_attr} filter="url(#shadow)">
     <rect x="980" y="630" width="860" height="390" rx="18" fill="#16161E" stroke="#2A2E3D" stroke-width="2"/>
     <rect x="980" y="630" width="860" height="48" rx="18" fill="#1F2335"/>
     <line x1="980" y1="678" x2="1840" y2="678" stroke="#2A2E3D" stroke-width="1"/>
@@ -331,20 +336,21 @@ def generate_cairo_svg(style, data, w=1920, h=1080):
   </g>
 </svg>"""
     elif style == "stripe":
-        t1 = data.get("left_title", "Vercel Serverless &amp; Actions")
-        t2 = data.get("right_title", "Convex Pre-Signed Upload")
+        t1 = str(data.get("left_title", "Vercel Serverless &amp; Actions")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        t2 = str(data.get("right_title", "Convex Pre-Signed Upload")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        header_text = str(data.get("title", "TECHNICAL LIMITS &amp; ARCHITECTURE MATRIX")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
       <feDropShadow dx="0" dy="24" stdDeviation="35" flood-color="#000000" flood-opacity="0.85"/>
     </filter>
   </defs>
-  <g filter="url(#shadow)">
+  <g {transform_attr} filter="url(#shadow)">
     <rect x="280" y="640" width="1360" height="380" rx="24" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
     <rect x="280" y="640" width="1360" height="52" rx="24" fill="#F8FAFC"/>
     <line x1="280" y1="692" x2="1640" y2="692" stroke="#E2E8F0" stroke-width="1.5"/>
     <circle cx="310" cy="666" r="6" fill="#EF4444"/><circle cx="330" cy="666" r="6" fill="#F59E0B"/><circle cx="350" cy="666" r="6" fill="#10B981"/>
-    <text x="380" y="673" font-family="Montserrat" font-size="15" fill="#475569" font-weight="700">TECHNICAL LIMITS &amp; ARCHITECTURE MATRIX</text>
+    <text x="380" y="673" font-family="Montserrat" font-size="15" fill="#475569" font-weight="700">{header_text}</text>
     <rect x="320" y="725" width="620" height="260" rx="16" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.5"/>
     <rect x="345" y="745" width="120" height="28" rx="6" fill="#EF4444"/>
     <text x="358" y="764" font-family="Montserrat" font-size="13" fill="#FFFFFF" font-weight="800">REJECTED</text>
@@ -364,56 +370,63 @@ def generate_cairo_svg(style, data, w=1920, h=1080):
   </g>
 </svg>"""
     elif style == "vercel":
+        header_text = str(data.get("title", "BENCHMARKS • TESLA T4 NVENC HARDWARE")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        m1 = str(data.get("metric1", "97.8 FPS")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        m2 = str(data.get("metric2", "3.07s")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        m3 = str(data.get("metric3", "< 15 MB")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
       <feDropShadow dx="0" dy="24" stdDeviation="35" flood-color="#000000" flood-opacity="0.9"/>
     </filter>
   </defs>
-  <g filter="url(#shadow)">
+  <g {transform_attr} filter="url(#shadow)">
     <rect x="320" y="670" width="1280" height="340" rx="16" fill="#000000" stroke="#333333" stroke-width="2"/>
     <rect x="320" y="670" width="1280" height="50" rx="16" fill="#0A0A0A"/>
     <line x1="320" y1="720" x2="1600" y2="720" stroke="#222222" stroke-width="1.5"/>
     <circle cx="350" cy="695" r="6" fill="#FFFFFF"/>
-    <text x="370" y="702" font-family="Montserrat" font-size="15" fill="#EDEDED" font-weight="700" letter-spacing="2">BENCHMARKS • TESLA T4 NVENC HARDWARE</text>
+    <text x="370" y="702" font-family="Montserrat" font-size="15" fill="#EDEDED" font-weight="700" letter-spacing="2">{header_text}</text>
     <rect x="360" y="750" width="370" height="225" rx="12" fill="#0A0A0A" stroke="#262626" stroke-width="1.5"/>
     <rect x="385" y="775" width="130" height="28" rx="6" fill="#14532D" stroke="#22C55E" stroke-width="1"/>
     <text x="396" y="794" font-family="JetBrains Mono" font-size="13" fill="#4ADE80" font-weight="800">▲ 10.6x FASTER</text>
-    <text x="385" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">97.8 FPS</text>
+    <text x="385" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">{m1}</text>
     <text x="385" y="905" font-family="Rubik" font-size="17" fill="#A1A1A1">Hardware GPU Encoding</text>
     <text x="385" y="935" font-family="JetBrains Mono" font-size="14" fill="#525252">vs 9.2 FPS on CPU</text>
     <rect x="770" y="750" width="370" height="225" rx="12" fill="#0A0A0A" stroke="#262626" stroke-width="1.5"/>
     <rect x="795" y="775" width="140" height="28" rx="6" fill="#0C4A6E" stroke="#0284C7" stroke-width="1"/>
     <text x="806" y="794" font-family="JetBrains Mono" font-size="13" fill="#38BDF8" font-weight="800">▼ 90% REDUCTION</text>
-    <text x="795" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">3.07s</text>
+    <text x="795" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">{m2}</text>
     <text x="795" y="905" font-family="Rubik" font-size="17" fill="#A1A1A1">10-Second Take Render</text>
     <text x="795" y="935" font-family="JetBrains Mono" font-size="14" fill="#525252">vs 32.5s on Chromium</text>
     <rect x="1180" y="750" width="380" height="225" rx="12" fill="#0A0A0A" stroke="#262626" stroke-width="1.5"/>
     <rect x="1205" y="775" width="130" height="28" rx="6" fill="#581C87" stroke="#A855F7" stroke-width="1"/>
     <text x="1216" y="794" font-family="JetBrains Mono" font-size="13" fill="#C084FC" font-weight="800">ZERO CRASH</text>
-    <text x="1205" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">&lt; 15 MB</text>
+    <text x="1205" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">{m3}</text>
     <text x="1205" y="905" font-family="Rubik" font-size="17" fill="#A1A1A1">VRAM Memory Footprint</text>
     <text x="1205" y="935" font-family="JetBrains Mono" font-size="14" fill="#525252">vs 1.8 GB RAM on CPU</text>
   </g>
 </svg>"""
     else: # linear
+        header_text = str(data.get("title", "ARCHITECTURE • FULL-STACK UPLOAD FLOW")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        node_text = str(data.get("active_node", "Convex Cloud")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        action_text = str(data.get("action", "generateUploadUrl()")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
       <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.75"/>
     </filter>
   </defs>
-  <g filter="url(#shadow)">
+  <g {transform_attr} filter="url(#shadow)">
     <rect x="220" y="630" width="1480" height="390" rx="20" fill="#0F172A" stroke="#6366F1" stroke-width="2"/>
     <rect x="220" y="630" width="1480" height="50" rx="20" fill="#0F172A" fill-opacity="0.8"/>
     <line x1="220" y1="680" x2="1700" y2="680" stroke="#334155" stroke-width="1.5"/>
     <circle cx="250" cy="655" r="7" fill="#EF4444"/><circle cx="272" cy="655" r="7" fill="#F59E0B"/><circle cx="294" cy="655" r="7" fill="#10B981"/>
-    <text x="325" y="662" font-family="Montserrat" font-size="16" fill="#94A3B8" font-weight="600">ARCHITECTURE • FULL-STACK UPLOAD FLOW</text>
+    <text x="325" y="662" font-family="Montserrat" font-size="16" fill="#94A3B8" font-weight="600">{header_text}</text>
     <rect x="990" y="705" width="285" height="285" rx="16" fill="#0B132B" stroke="#38BDF8" stroke-width="2.5"/>
     <rect x="1010" y="725" width="85" height="28" rx="6" fill="#0284C7"/>
     <text x="1020" y="744" font-family="JetBrains Mono" font-size="13" fill="#FFFFFF" font-weight="700">● ACTIVE</text>
-    <text x="1010" y="790" font-family="Montserrat" font-size="24" fill="#FFFFFF" font-weight="800">Convex Cloud</text>
-    <text x="1010" y="822" font-family="Rubik" font-size="17" fill="#38BDF8" font-weight="600">generateUploadUrl()</text>
+    <text x="1010" y="790" font-family="Montserrat" font-size="24" fill="#FFFFFF" font-weight="800">{node_text}</text>
+    <text x="1010" y="822" font-family="Rubik" font-size="17" fill="#38BDF8" font-weight="600">{action_text}</text>
     <line x1="1010" y1="855" x2="1245" y2="855" stroke="#1E3A8A" stroke-width="1.5"/>
     <text x="1010" y="885" font-family="JetBrains Mono" font-size="13" fill="#93C5FD" font-weight="600">RETURNS TO CLIENT:</text>
     <text x="1010" y="915" font-family="JetBrains Mono" font-size="16" fill="#FDE047" font-weight="700">Pre-Signed URL (3m)</text>
@@ -485,20 +498,19 @@ def plan_multi_cairo_cues(total_sec, preferred_style="auto"):
 
     cues = []
     if total_sec < 20:
-        cues.append({"start": round(total_sec * 0.15, 2), "end": round(total_sec * 0.85, 2), "style": styles_cycle[0]})
+        cues.append({"start": round(total_sec * 0.15, 2), "end": round(total_sec * 0.85, 2), "style": styles_cycle[0], "id": "scene-0"})
     elif total_sec < 50:
-        cues.append({"start": 3.0, "end": 15.0, "style": styles_cycle[0]})
-        cues.append({"start": round(total_sec * 0.60, 2), "end": round(total_sec * 0.90, 2), "style": styles_cycle[1 % len(styles_cycle)]})
+        cues.append({"start": 3.0, "end": 15.0, "style": styles_cycle[0], "id": "scene-0"})
+        cues.append({"start": round(total_sec * 0.60, 2), "end": round(total_sec * 0.90, 2), "style": styles_cycle[1 % len(styles_cycle)], "id": "scene-1"})
     elif total_sec < 85:
-        cues.append({"start": 3.0, "end": 16.0, "style": styles_cycle[0]})
-        cues.append({"start": round(total_sec * 0.38, 2), "end": round(total_sec * 0.55, 2), "style": styles_cycle[1 % len(styles_cycle)]})
-        cues.append({"start": round(total_sec * 0.70, 2), "end": round(total_sec * 0.88, 2), "style": styles_cycle[2 % len(styles_cycle)]})
+        cues.append({"start": 3.0, "end": 16.0, "style": styles_cycle[0], "id": "scene-0"})
+        cues.append({"start": round(total_sec * 0.38, 2), "end": round(total_sec * 0.55, 2), "style": styles_cycle[1 % len(styles_cycle)], "id": "scene-1"})
+        cues.append({"start": round(total_sec * 0.70, 2), "end": round(total_sec * 0.88, 2), "style": styles_cycle[2 % len(styles_cycle)], "id": "scene-2"})
     else:
-        # Full multi-stage distribution for standard developer videos (~90s+)
-        cues.append({"start": 3.0, "end": 16.0, "style": styles_cycle[0]})
-        cues.append({"start": 26.0, "end": 42.0, "style": styles_cycle[1 % len(styles_cycle)]})
-        cues.append({"start": 54.0, "end": 72.0, "style": styles_cycle[2 % len(styles_cycle)]})
-        cues.append({"start": 78.0, "end": 90.0, "style": styles_cycle[3 % len(styles_cycle)]})
+        cues.append({"start": 3.0, "end": 16.0, "style": styles_cycle[0], "id": "scene-0"})
+        cues.append({"start": 26.0, "end": 42.0, "style": styles_cycle[1 % len(styles_cycle)], "id": "scene-1"})
+        cues.append({"start": 54.0, "end": 72.0, "style": styles_cycle[2 % len(styles_cycle)], "id": "scene-2"})
+        cues.append({"start": 78.0, "end": 90.0, "style": styles_cycle[3 % len(styles_cycle)], "id": "scene-3"})
 
     return cues
 
@@ -586,35 +598,69 @@ def main():
             if os.path.exists(p) and os.path.getsize(p) > 1000:
                 source_video = p; break
 
-    # 3. Plan & Generate MULTIPLE Cairo Graphics Overlays
+    # 3. Plan & Generate MULTIPLE Cairo Graphics Overlays with User Layout & Text Edits
     cairo_style = args.graphics_style
     if cairo_style == "auto":
         cairo_style = render_props.get("graphicsStyle", overrides.get("graphicsStyle", "auto"))
 
     graphic_overlays = []
     if not args.no_graphics and cairo_style != "none":
-        # Check if project already has multi-scene cues
+        scene_overrides = overrides.get("scenes", {})
         reviewed_scenes_file = os.path.join(workdir, "reviewed-scenes.json")
         custom_scenes = []
         if os.path.exists(reviewed_scenes_file):
             try: custom_scenes = json.load(open(reviewed_scenes_file, "r"))
             except: pass
 
+        cues_to_render = []
         if custom_scenes and len(custom_scenes) >= 2:
             for idx, sc in enumerate(custom_scenes):
-                start = sc.get("startSec", 0)
-                end = sc.get("endSec", start + 10)
-                sty = sc.get("style", cairo_style if cairo_style != "auto" else "tokyo-night")
-                png_path = os.path.join(workdir, f"cairo_overlay_{idx}.png")
-                if render_cairo_png(sty, sc.get("props", {}), png_path, w=res_x, h=res_y):
-                    graphic_overlays.append({"path": png_path, "start": start, "end": end, "style": sty})
+                cues_to_render.append({
+                    "id": sc.get("id", f"scene-{idx}"),
+                    "start": sc.get("startSec", 0),
+                    "end": sc.get("endSec", 10),
+                    "style": sc.get("style", cairo_style if cairo_style != "auto" else "tokyo-night"),
+                    "props": sc.get("props", {})
+                })
         else:
-            # Auto-plan multiple Cairo graphics across the clip timeline
-            planned_cues = plan_multi_cairo_cues(total_dur_sec, preferred_style=cairo_style)
-            for idx, cue in enumerate(planned_cues):
-                png_path = os.path.join(workdir, f"cairo_overlay_{idx}.png")
-                if render_cairo_png(cue["style"], {}, png_path, w=res_x, h=res_y):
-                    graphic_overlays.append({"path": png_path, "start": cue["start"], "end": cue["end"], "style": cue["style"]})
+            cues_to_render = plan_multi_cairo_cues(total_dur_sec, preferred_style=cairo_style)
+
+        for idx, cue in enumerate(cues_to_render):
+            cue_id = cue.get("id", f"scene-{idx}")
+            # Check user scene override
+            sc_override = scene_overrides.get(cue_id, {}) or scene_overrides.get(f"scene-{idx}", {})
+
+            # Skip if user hid this graphic
+            if sc_override.get("hidden") is True:
+                continue
+
+            # Merge user-edited text props
+            cue_props = {**cue.get("props", {}), **sc_override.get("props", {})}
+
+            # Apply user layout & positioning edits (dx, dy, scale)
+            elem_transforms = sc_override.get("elements", {})
+            card_transform = elem_transforms.get("card", {}) or elem_transforms.get("root", {})
+            cue_props["dx"] = card_transform.get("dx", cue_props.get("dx", 0))
+            cue_props["dy"] = card_transform.get("dy", cue_props.get("dy", 0))
+            cue_props["scale"] = card_transform.get("scale", cue_props.get("scale", 1.0))
+
+            # Apply timing pin overrides if user adjusted time in editor
+            start_t = cue["start"]
+            end_t = cue["end"]
+            if sc_override.get("timing"):
+                timing = sc_override["timing"]
+                start_t = timing.get("srcStart", timing.get("startSec", start_t))
+                end_t = timing.get("srcEnd", timing.get("endSec", end_t))
+
+            sty = cue.get("style", cairo_style if cairo_style != "auto" else "tokyo-night")
+            png_path = os.path.join(workdir, f"cairo_overlay_{idx}.png")
+            if render_cairo_png(sty, cue_props, png_path, w=res_x, h=res_y):
+                graphic_overlays.append({
+                    "path": png_path,
+                    "start": start_t,
+                    "end": end_t,
+                    "style": sty
+                })
 
     ass_path = os.path.join(workdir, "subtitles_custom.ass")
     if not args.no_captions:
@@ -647,7 +693,6 @@ def main():
         base_vf.append(f"scale={res_x}:{res_y}")
 
     if graphic_overlays:
-        # Chain multiple graphic overlays across timeline
         filter_parts = [f"[0:v]{','.join(base_vf)}[v0]"]
         for i, g in enumerate(graphic_overlays):
             in_v = f"v{i}"
@@ -662,9 +707,10 @@ def main():
     if select_filter != "1":
         cmd_filter += ["-af", f"aselect='{select_filter}',asetpts=N/SR/TB"]
 
+    # Use preset p4 for high-speed balanced NVENC throughput (~42+ FPS)
     gpu_nvenc_flags = [
         "-c:v", "h264_nvenc",
-        "-preset", "p7",
+        "-preset", "p4",
         "-tune", "hq",
         "-b:v", args.bitrate,
         "-c:a", "aac", "-b:a", "192k",
@@ -673,9 +719,9 @@ def main():
 
     cmd = ["ffmpeg", "-y"] + inputs + cmd_filter + gpu_nvenc_flags
 
-    print(f"🎬 Starting GPU Export (Tesla T4 NVENC)...")
+    print(f"🎬 Starting GPU Export (Tesla T4 NVENC Preset P4)...")
     if graphic_overlays:
-        print(f"✨ Generating and compositing {len(graphic_overlays)} Cairo AI Graphics across timeline:")
+        print(f"✨ Generating and compositing {len(graphic_overlays)} Cairo AI Graphics with user layout & text edits:")
         for idx, g in enumerate(graphic_overlays):
             print(f"   [{idx+1}] {g['style'].upper()} graphic at {g['start']}s -> {g['end']}s")
     else:
