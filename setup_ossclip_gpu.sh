@@ -434,7 +434,6 @@ def render_cairo_png(style, data, out_png, w=1920, h=1080):
 def build_ass_subtitles(caption_lines, theme, out_ass_path, res_x=1920, res_y=1080, style_info=None):
     if not style_info: style_info = {}
     font_display = theme.get("fontDisplay", style_info.get("fontDisplay", "Montserrat"))
-    # Strip quotes if any
     font_display = font_display.replace("'", "").replace('"', '').split(',')[0].strip()
     accent_hex = theme.get("accent", style_info.get("accent", "#FFE600"))
     accent_ass = hex_to_ass_color(accent_hex)
@@ -478,8 +477,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     with open(out_ass_path, "w", encoding="utf-8") as f:
         f.write(header + "\n".join(events) + "\n")
 
+def plan_multi_cairo_cues(total_sec, preferred_style="auto"):
+    """Distributes multiple graphics along the video timeline with breathing room."""
+    styles_cycle = ["linear", "tokyo-night", "stripe", "vercel"]
+    if preferred_style and preferred_style not in ["auto", "none"]:
+        styles_cycle = [preferred_style]
+
+    cues = []
+    if total_sec < 20:
+        cues.append({"start": round(total_sec * 0.15, 2), "end": round(total_sec * 0.85, 2), "style": styles_cycle[0]})
+    elif total_sec < 50:
+        cues.append({"start": 3.0, "end": 15.0, "style": styles_cycle[0]})
+        cues.append({"start": round(total_sec * 0.60, 2), "end": round(total_sec * 0.90, 2), "style": styles_cycle[1 % len(styles_cycle)]})
+    elif total_sec < 85:
+        cues.append({"start": 3.0, "end": 16.0, "style": styles_cycle[0]})
+        cues.append({"start": round(total_sec * 0.38, 2), "end": round(total_sec * 0.55, 2), "style": styles_cycle[1 % len(styles_cycle)]})
+        cues.append({"start": round(total_sec * 0.70, 2), "end": round(total_sec * 0.88, 2), "style": styles_cycle[2 % len(styles_cycle)]})
+    else:
+        # Full multi-stage distribution for standard developer videos (~90s+)
+        cues.append({"start": 3.0, "end": 16.0, "style": styles_cycle[0]})
+        cues.append({"start": 26.0, "end": 42.0, "style": styles_cycle[1 % len(styles_cycle)]})
+        cues.append({"start": 54.0, "end": 72.0, "style": styles_cycle[2 % len(styles_cycle)]})
+        cues.append({"start": 78.0, "end": 90.0, "style": styles_cycle[3 % len(styles_cycle)]})
+
+    return cues
+
 def main():
-    parser = argparse.ArgumentParser(description="OSSClip GPU Exporter with Cairo AI Graphics")
+    parser = argparse.ArgumentParser(description="OSSClip GPU Exporter with Multi-Graphic Cairo Support")
     parser.add_argument("workdir")
     parser.add_argument("--out", "-o", default=None)
     parser.add_argument("--format", choices=["auto", "vertical", "original", "blur-backdrop"], default="auto")
@@ -520,11 +544,10 @@ def main():
     res_x = 1080 if is_vertical else prop_w
     res_y = 1920 if is_vertical else prop_h
 
-    # Merge Theme: Base -> Style Preset -> Overrides from Web Editor
+    # Merge Theme: Base -> Preset -> Overrides from Web Editor
     style_info = STYLE_PRESETS.get(args.style, {})
     theme = {**render_props.get("theme", {}), **style_info, **overrides.get("theme", {})}
 
-    # Check Caption Visibility Override
     if overrides.get("captionsHidden") is True:
         args.no_captions = True
 
@@ -551,6 +574,9 @@ def main():
     if user_cuts:
         spans = subtract_user_cuts(spans, user_cuts)
 
+    # Compute Output Duration
+    total_dur_sec = sum(s["srcOut"] - s["srcIn"] for s in spans if s.get("srcOut", 0) > s.get("srcIn", 0))
+
     source_video = None
     if os.path.exists(os.path.join(workdir, "production.json")):
         source_video = json.load(open(os.path.join(workdir, "production.json"))).get("source", {}).get("path")
@@ -560,25 +586,35 @@ def main():
             if os.path.exists(p) and os.path.getsize(p) > 1000:
                 source_video = p; break
 
-    # Check Cairo Graphics Style & Scenes
+    # 3. Plan & Generate MULTIPLE Cairo Graphics Overlays
     cairo_style = args.graphics_style
     if cairo_style == "auto":
-        cairo_style = render_props.get("graphicsStyle", overrides.get("graphicsStyle", "tokyo-night"))
+        cairo_style = render_props.get("graphicsStyle", overrides.get("graphicsStyle", "auto"))
 
-    overlay_png = None
+    graphic_overlays = []
     if not args.no_graphics and cairo_style != "none":
-        # Check if reviewed-scenes.json exists with custom edits
-        scene_data = {}
+        # Check if project already has multi-scene cues
         reviewed_scenes_file = os.path.join(workdir, "reviewed-scenes.json")
+        custom_scenes = []
         if os.path.exists(reviewed_scenes_file):
-            try:
-                scs = json.load(open(reviewed_scenes_file, "r"))
-                if scs and isinstance(scs, list):
-                    scene_data = scs[0].get("props", {})
+            try: custom_scenes = json.load(open(reviewed_scenes_file, "r"))
             except: pass
 
-        overlay_png = os.path.join(workdir, "cairo_overlay.png")
-        render_cairo_png(cairo_style, scene_data, overlay_png, w=res_x, h=res_y)
+        if custom_scenes and len(custom_scenes) >= 2:
+            for idx, sc in enumerate(custom_scenes):
+                start = sc.get("startSec", 0)
+                end = sc.get("endSec", start + 10)
+                sty = sc.get("style", cairo_style if cairo_style != "auto" else "tokyo-night")
+                png_path = os.path.join(workdir, f"cairo_overlay_{idx}.png")
+                if render_cairo_png(sty, sc.get("props", {}), png_path, w=res_x, h=res_y):
+                    graphic_overlays.append({"path": png_path, "start": start, "end": end, "style": sty})
+        else:
+            # Auto-plan multiple Cairo graphics across the clip timeline
+            planned_cues = plan_multi_cairo_cues(total_dur_sec, preferred_style=cairo_style)
+            for idx, cue in enumerate(planned_cues):
+                png_path = os.path.join(workdir, f"cairo_overlay_{idx}.png")
+                if render_cairo_png(cue["style"], {}, png_path, w=res_x, h=res_y):
+                    graphic_overlays.append({"path": png_path, "start": cue["start"], "end": cue["end"], "style": cue["style"]})
 
     ass_path = os.path.join(workdir, "subtitles_custom.ass")
     if not args.no_captions:
@@ -597,8 +633,8 @@ def main():
     out_file = os.path.abspath(out_file)
 
     inputs = ["-hwaccel", "cuda", "-i", source_video]
-    if overlay_png and os.path.exists(overlay_png):
-        inputs += ["-i", overlay_png]
+    for g in graphic_overlays:
+        inputs += ["-i", g["path"]]
 
     base_vf = []
     if select_filter != "1":
@@ -610,9 +646,15 @@ def main():
     else:
         base_vf.append(f"scale={res_x}:{res_y}")
 
-    if overlay_png and os.path.exists(overlay_png):
-        filter_str = f"[0:v]{','.join(base_vf)}[v0]; [v0][1:v]overlay=enable='between(t,2,10)':format=auto{ass_filter}[outv]"
-        cmd_filter = ["-filter_complex", filter_str, "-map", "[outv]", "-map", "0:a"]
+    if graphic_overlays:
+        # Chain multiple graphic overlays across timeline
+        filter_parts = [f"[0:v]{','.join(base_vf)}[v0]"]
+        for i, g in enumerate(graphic_overlays):
+            in_v = f"v{i}"
+            next_v = f"v{i+1}" if i < len(graphic_overlays) - 1 else "vlast"
+            filter_parts.append(f"[{in_v}][{i+1}:v]overlay=enable='between(t,{g['start']},{g['end']})':format=auto[{next_v}]")
+        filter_parts.append(f"[vlast]null{ass_filter}[outv]")
+        cmd_filter = ["-filter_complex", "; ".join(filter_parts), "-map", "[outv]", "-map", "0:a"]
     else:
         filter_str = f"{','.join(base_vf)}{ass_filter}"
         cmd_filter = ["-vf", filter_str]
@@ -632,8 +674,10 @@ def main():
     cmd = ["ffmpeg", "-y"] + inputs + cmd_filter + gpu_nvenc_flags
 
     print(f"🎬 Starting GPU Export (Tesla T4 NVENC)...")
-    if overlay_png and os.path.exists(overlay_png):
-        print(f"✨ Cairo Vector Graphics: {cairo_style}")
+    if graphic_overlays:
+        print(f"✨ Generating and compositing {len(graphic_overlays)} Cairo AI Graphics across timeline:")
+        for idx, g in enumerate(graphic_overlays):
+            print(f"   [{idx+1}] {g['style'].upper()} graphic at {g['start']}s -> {g['end']}s")
     else:
         print(f"⚡ Clean Cut Video (No Graphics)")
 
