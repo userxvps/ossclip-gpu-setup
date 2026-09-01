@@ -877,6 +877,63 @@ replace_in_file(
           }
           const child = spawn(spawnBinary, spawnArgs, {'''
 )
+# Patch produce-wizard.ts to update prompt copy and make High-Speed GPU Engine the primary choice
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/interactive/produce-wizard.ts",
+    '''        message: "Render now, or review the cut first?",
+        initialValue: "review",
+        options: [
+          {
+            value: "review",
+            label: "Review the cut first",
+            hint: "opens the editor; render from its button",
+          },
+          { value: "render", label: "Render now", hint: "straight to a finished file" },
+        ],''',
+    '''        message: "Render now, or review the cut first?",
+        initialValue: "render",
+        options: [
+          {
+            value: "render",
+            label: "Render now (High-Speed GPU Engine)",
+            hint: "ultra-fast export via Tesla T4 NVENC (~30s, no Remotion)",
+          },
+          {
+            value: "review",
+            label: "Review the cut first in Web Editor",
+            hint: "opens editor to adjust text, layouts, graphics",
+          },
+        ],'''
+)
+
+# Patch produce.ts to run ossclip-gpu-render directly during the render phase
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/src/produce.ts",
+    '''    await phases.time("render", () =>
+      renderProduction(props, {
+        publicDir: dirname(renderVideo),
+        outPath: rawPath,''',
+    '''    await phases.time("render", async () => {
+      if (existsSync("/usr/local/bin/ossclip-gpu-render")) {
+        if (renderHud) renderHud.stop();
+        const { spawnSync } = await import("node:child_process");
+        const workdir = dirname(renderVideo);
+        console.log(`\n⚡ Rendering with High-Speed GPU Engine (Tesla T4 NVENC)...`);
+        const res = spawnSync(
+          "/usr/local/bin/ossclip-gpu-render",
+          [workdir, "--format", "auto", "--out", rawPath],
+          { stdio: "inherit" }
+        );
+        if (res.status !== 0) {
+          throw new Error(`GPU render failed with exit code ${res.status}`);
+        }
+        return;
+      }
+      return renderProduction(props, {
+        publicDir: dirname(renderVideo),
+        outPath: rawPath,'''
+)
+
 
 # Patch phonetics.ts to allow labial onsets (e.g. "parcel" -> "Vercel")
 replace_in_file(
