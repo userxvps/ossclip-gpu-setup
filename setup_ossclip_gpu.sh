@@ -300,43 +300,68 @@ def subtract_user_cuts(spans, user_cuts):
         current_spans = new_spans
     return [{"srcIn": s[0], "srcOut": s[1]} for s in current_spans]
 
+def wrap_text_to_width(text, max_w, font_size, char_w_ratio=0.62):
+    if not text: return []
+    words = str(text).split()
+    if not words: return []
+    
+    char_limit = max(1, int(max_w / max(1, (font_size * char_w_ratio))))
+    lines = []
+    curr = []
+    curr_len = 0
+    
+    for word in words:
+        w_len = len(word)
+        if not curr:
+            curr.append(word)
+            curr_len = w_len
+        elif curr_len + 1 + w_len <= char_limit:
+            curr.append(word)
+            curr_len += 1 + w_len
+        else:
+            lines.append(" ".join(curr))
+            curr = [word]
+            curr_len = w_len
+    if curr:
+        lines.append(" ".join(curr))
+    return lines
+
 def get_stage_geometry(layout, is_landscape=True, w=1920, h=1080):
     """
     Implements Remotion stage.ts exact slot math for both landscape and portrait.
     """
     if layout == "lower-third":
-        g = {"x": 0.05, "y": 0.70, "w": 0.62, "h": 0.18} if is_landscape else {"x": 0.04, "y": 0.56, "w": 0.92, "h": 0.22}
+        g = {"x": 0.05, "y": 0.70, "w": 0.62, "h": 0.20} if is_landscape else {"x": 0.04, "y": 0.56, "w": 0.92, "h": 0.22}
         caption_anchor = 0.62 if is_landscape else 0.49
         video_mode = "full"
     elif layout in ["split-left", "split-right"]:
         if is_landscape:
             left = (layout == "split-left")
-            g = {"x": 0.55 if left else 0.05, "y": 0.20, "w": 0.40, "h": 0.56}
-            caption_anchor = 0.82
+            g = {"x": 0.54 if left else 0.06, "y": 0.16, "w": 0.40, "h": 0.64}
+            caption_anchor = 0.84
             video_mode = "split-left" if left else "split-right"
         else:
-            # In portrait, split-left/right places video on top 50%, card on bottom half
-            g = {"x": 0.04, "y": 0.58, "w": 0.92, "h": 0.20}
-            caption_anchor = 0.53
+            g = {"x": 0.04, "y": 0.56, "w": 0.92, "h": 0.24}
+            caption_anchor = 0.52
             video_mode = "video-top"
     elif layout == "video-top":
-        g = {"x": 0.05, "y": 0.20, "w": 0.40, "h": 0.56} if is_landscape else {"x": 0.04, "y": 0.54, "w": 0.92, "h": 0.24}
-        caption_anchor = 0.82 if is_landscape else 0.48
+        g = {"x": 0.08, "y": 0.48, "w": 0.84, "h": 0.40} if is_landscape else {"x": 0.04, "y": 0.52, "w": 0.92, "h": 0.26}
+        caption_anchor = 0.84 if is_landscape else 0.48
         video_mode = "video-top"
     elif layout == "graphic-only":
-        g = {"x": 0.04, "y": 0.14, "w": 0.80, "h": 0.54} if is_landscape else {"x": 0.04, "y": 0.18, "w": 0.92, "h": 0.54}
-        caption_anchor = 0.80 if is_landscape else 0.75
+        g = {"x": 0.06, "y": 0.12, "w": 0.88, "h": 0.68} if is_landscape else {"x": 0.04, "y": 0.14, "w": 0.92, "h": 0.58}
+        caption_anchor = 0.84 if is_landscape else 0.75
         video_mode = "graphic-only"
     elif layout == "pip-bubble":
-        g = {"x": 0.06, "y": 0.14, "w": 0.78, "h": 0.42} if is_landscape else {"x": 0.04, "y": 0.18, "w": 0.92, "h": 0.42}
+        g = {"x": 0.06, "y": 0.12, "w": 0.88, "h": 0.48} if is_landscape else {"x": 0.04, "y": 0.14, "w": 0.92, "h": 0.46}
         caption_anchor = 0.78 if is_landscape else 0.65
         video_mode = "full"
     elif layout == "blurred-behind":
-        g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36} if is_landscape else {"x": 0.04, "y": 0.24, "w": 0.92, "h": 0.36}
-        caption_anchor = 0.80 if is_landscape else 0.69
+        g = {"x": 0.08, "y": 0.18, "w": 0.84, "h": 0.52} if is_landscape else {"x": 0.04, "y": 0.22, "w": 0.92, "h": 0.44}
+        caption_anchor = 0.82 if is_landscape else 0.69
         video_mode = "blur"
     else: # full-bleed
-        g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36} if is_landscape else {"x": 0.04, "y": 0.24, "w": 0.92, "h": 0.36}
+        g = {"x": 0.08, "y": 0.20, "w": 0.84, "h": 0.50} if is_landscape else {"x": 0.04, "y": 0.22, "w": 0.92, "h": 0.44}
         caption_anchor = 0.80 if is_landscape else 0.70
         video_mode = "full"
 
@@ -363,196 +388,493 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
     transform_attr = f'transform="translate({dx}, {dy}) scale({scale})"' if (dx != 0 or dy != 0 or scale != 1.0) else ''
     content_svg = ""
 
-    if component == "TitleCard":
-        eyebrow = esc(props.get("eyebrow", ""))
-        title = esc(props.get("title", ""))
-        sub = esc(props.get("sub", ""))
-        emphasis = esc(props.get("emphasis", ""))
+    pad_x = 44 if is_landscape else 36
+    pad_y = 36 if is_landscape else 30
+    inner_w = box_w - (pad_x * 2)
+    inner_h = box_h - (pad_y * 2)
+    center_x = box_x + box_w // 2
 
+    if component == "TitleCard":
+        eyebrow = str(props.get("eyebrow", "") or "").strip()
+        title = str(props.get("title", "") or "").strip()
+        sub = str(props.get("sub", "") or "").strip()
+        emphasis = str(props.get("emphasis", "") or "").strip()
+
+        if emphasis and title and emphasis.lower() in title.lower():
+            title = ""
+
+        # Title Card in Lower-Third (Left Aligned on Desktop)
         if layout == "lower-third" and is_landscape:
             items = []
-            curr_y = box_y + 42
+            eyebrow_fsize = 18
+            title_fsize = 40
+            sub_fsize = 20
+
+            # Scale down if tight
+            title_lines = wrap_text_to_width(title, inner_w, title_fsize, 0.65)
+            if len(title_lines) > 2:
+                title_fsize = 32
+                title_lines = wrap_text_to_width(title, inner_w, title_fsize, 0.65)
+
+            total_h = 0
+            if eyebrow: total_h += eyebrow_fsize + 14
+            total_h += len(title_lines) * (title_fsize * 1.15)
+            if sub and sub.lower() != title.lower(): total_h += sub_fsize + 12
+
+            curr_y = box_y + (box_h - total_h) // 2 + 20
+            start_x = box_x + pad_x
+
             if eyebrow:
-                items.append(f'<text x="{box_x + 36}" y="{curr_y}" font-family="{font_display}" font-size="17" font-weight="700" fill="#94A3B8" letter-spacing="3">{eyebrow.upper()}</text>')
-                curr_y += 48
-            else:
-                curr_y += 20
-            items.append(f'<text x="{box_x + 36}" y="{curr_y}" font-family="{font_display}" font-size="42" font-weight="900" fill="{fg}">{title.upper()}</text>')
+                items.append(f'<text x="{start_x}" y="{curr_y}" font-family="{font_display}" font-size="{eyebrow_fsize}" font-weight="700" fill="#94A3B8" letter-spacing="3">{esc(eyebrow).upper()}</text>')
+                curr_y += eyebrow_fsize + 14
+
+            for line in title_lines:
+                items.append(f'<text x="{start_x}" y="{curr_y}" font-family="{font_display}" font-size="{title_fsize}" font-weight="900" fill="{fg}">{esc(line).upper()}</text>')
+                curr_y += int(title_fsize * 1.15)
+
             if sub and sub.lower() != title.lower():
-                items.append(f'<text x="{box_x + 36}" y="{curr_y + 38}" font-family="{font_display}" font-size="20" font-weight="600" fill="#A0AEC0">{sub}</text>')
+                curr_y += 4
+                sub_lines = wrap_text_to_width(sub, inner_w, sub_fsize, 0.58)
+                for line in sub_lines[:2]:
+                    items.append(f'<text x="{start_x}" y="{curr_y}" font-family="{font_display}" font-size="{sub_fsize}" font-weight="600" fill="#CBD5E1">{esc(line)}</text>')
+                    curr_y += int(sub_fsize * 1.2)
             content_svg = "\n".join(items)
+
         else:
-            items = []
-            title_fsize = 48 if is_landscape else 40
-            curr_y = box_y + (85 if is_landscape else 75)
-            if eyebrow:
-                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">{eyebrow.upper()}</text>')
-                curr_y += (70 if is_landscape else 60)
+            # Centered Title Card (Desktop Hero & Mobile Vertical)
+            eyebrow_fsize = 20 if is_landscape else 18
+            emphasis_fsize = 80 if is_landscape else 72
+            title_fsize = 48 if is_landscape else 42
+            sub_fsize = 24 if is_landscape else 22
+
             if emphasis:
-                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="80" font-weight="900" fill="{accent}" text-anchor="middle">{emphasis}</text>')
-                curr_y += (80 if is_landscape else 70)
-            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="{title_fsize}" font-weight="900" fill="{fg}" text-anchor="middle">{title.upper()}</text>')
+                max_emp_w = inner_w * 0.85
+                emp_char_w = len(emphasis) * emphasis_fsize * 0.70
+                if emp_char_w > max_emp_w:
+                    emphasis_fsize = int(max_emp_w / (len(emphasis) * 0.70))
+
+            title_lines = wrap_text_to_width(title, inner_w, title_fsize, 0.65) if title else []
+            if len(title_lines) > 2 or (emphasis and len(title_lines) > 1):
+                title_fsize = 36 if is_landscape else 32
+                title_lines = wrap_text_to_width(title, inner_w, title_fsize, 0.65)
+
+            def calc_stack_h(e_fz, emp_fz, t_fz, s_fz, t_lines):
+                h_acc = 0
+                if eyebrow: h_acc += e_fz + 18
+                if emphasis: h_acc += emp_fz + 20
+                if t_lines: h_acc += len(t_lines) * (t_fz * 1.18) + 12
+                if sub: h_acc += s_fz * 1.3 + 10
+                return h_acc
+
+            stack_h = calc_stack_h(eyebrow_fsize, emphasis_fsize, title_fsize, sub_fsize, title_lines)
+            if stack_h > inner_h * 0.95:
+                scale_ratio = (inner_h * 0.90) / max(1, stack_h)
+                eyebrow_fsize = max(14, int(eyebrow_fsize * scale_ratio))
+                emphasis_fsize = max(44, int(emphasis_fsize * scale_ratio))
+                title_fsize = max(24, int(title_fsize * scale_ratio))
+                sub_fsize = max(16, int(sub_fsize * scale_ratio))
+                title_lines = wrap_text_to_width(title, inner_w, title_fsize, 0.65) if title else []
+                stack_h = calc_stack_h(eyebrow_fsize, emphasis_fsize, title_fsize, sub_fsize, title_lines)
+
+            curr_y = box_y + (box_h - stack_h) // 2 + eyebrow_fsize + 10
+            items = []
+
+            if eyebrow:
+                items.append(f'<text x="{center_x}" y="{curr_y}" font-family="{font_display}" font-size="{eyebrow_fsize}" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">{esc(eyebrow).upper()}</text>')
+                curr_y += eyebrow_fsize + 18
+
+            if emphasis:
+                items.append(f'<text x="{center_x}" y="{curr_y + emphasis_fsize * 0.85}" font-family="{font_display}" font-size="{emphasis_fsize}" font-weight="900" fill="{accent}" text-anchor="middle">{esc(emphasis)}</text>')
+                curr_y += emphasis_fsize + 20
+
+            if title_lines:
+                for line in title_lines:
+                    items.append(f'<text x="{center_x}" y="{curr_y + title_fsize * 0.85}" font-family="{font_display}" font-size="{title_fsize}" font-weight="900" fill="{fg}" text-anchor="middle">{esc(line).upper()}</text>')
+                    curr_y += int(title_fsize * 1.18)
+                curr_y += 10
+
             if sub and sub.lower() != title.lower():
-                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y + 50}" font-family="{font_display}" font-size="22" font-weight="600" fill="#CBD5E1" text-anchor="middle">{sub}</text>')
+                sub_lines = wrap_text_to_width(sub, inner_w, sub_fsize, 0.58)
+                for line in sub_lines[:2]:
+                    items.append(f'<text x="{center_x}" y="{curr_y + sub_fsize * 0.85}" font-family="{font_display}" font-size="{sub_fsize}" font-weight="600" fill="#CBD5E1" text-anchor="middle">{esc(line)}</text>')
+                    curr_y += int(sub_fsize * 1.25)
+
             content_svg = "\n".join(items)
 
-    elif component == "FlowDiagram":
-        nodes = props.get("nodes", [])
-        emphasize_last = props.get("emphasizeLast", True)
-        n_count = len(nodes)
+    elif component == "StatCard":
+        label = str(props.get("label", "METRIC") or "METRIC").strip()
+        value = str(props.get("value", "0") or "0").strip()
+        caption = str(props.get("caption", "") or "").strip()
+        inverted = props.get("inverted", False)
 
-        items = [
-            f'<text x="{box_x + box_w//2}" y="{box_y + 65}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" letter-spacing="2" text-anchor="middle">ARCHITECTURE PIPELINE</text>'
-        ]
+        card_bg = "#FFFFFF" if inverted else "#1E293B"
+        card_fg = "#0F172A" if inverted else "#FFFFFF"
+        val_color = "#0F172A" if inverted else accent
 
-        if is_landscape and n_count <= 4:
-            # Horizontal pipeline
-            chip_w = min(360, (box_w - (n_count * 80)) // max(1, n_count))
-            total_w = n_count * chip_w + (n_count - 1) * 70
-            start_x = box_x + (box_w - total_w) // 2
-            chip_y = box_y + box_h // 2 - 45
-            for i, node in enumerate(nodes):
-                cx = start_x + i * (chip_w + 70)
-                is_emph = (i == n_count - 1 and emphasize_last)
-                bg = accent if is_emph else "#1E293B"
-                text_color = "#0F172A" if is_emph else "#FFFFFF"
-                border_color = accent if is_emph else "#475569"
-                items.append(f'<rect x="{cx}" y="{chip_y}" width="{chip_w}" height="90" rx="16" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
-                items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + 55}" font-family="{font_display}" font-size="20" font-weight="800" fill="{text_color}" text-anchor="middle">{esc(node).upper()}</text>')
-                if i < n_count - 1:
-                    items.append(f'<text x="{cx + chip_w + 35}" y="{chip_y + 55}" font-family="{font_display}" font-size="34" font-weight="900" fill="#64748B" text-anchor="middle">→</text>')
-        else:
-            # Vertical pipeline stack (Portrait 9:16)
-            chip_h = min(75, (box_h - 140 - (n_count * 45)) // max(1, n_count))
-            chip_w = min(700, box_w - 100)
-            chip_x = box_x + (box_w - chip_w) // 2
-            gap = 48
-            total_h = n_count * chip_h + (n_count - 1) * gap
-            start_y = box_y + 110 + max(0, (box_h - 110 - total_h) // 2)
+        val_fsize = 84 if is_landscape else 72
+        lbl_fsize = 32 if is_landscape else 28
+        cap_fsize = 22 if is_landscape else 20
 
-            for i, node in enumerate(nodes):
-                cy = start_y + i * (chip_h + gap)
-                is_emph = (i == n_count - 1 and emphasize_last)
-                bg = accent if is_emph else "#1E293B"
-                text_color = "#0F172A" if is_emph else "#FFFFFF"
-                border_color = accent if is_emph else "#475569"
-                items.append(f'<rect x="{chip_x}" y="{cy}" width="{chip_w}" height="{chip_h}" rx="16" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
-                items.append(f'<text x="{chip_x + chip_w//2}" y="{cy + chip_h//2 + 9}" font-family="{font_display}" font-size="24" font-weight="800" fill="{text_color}" text-anchor="middle">{esc(node).upper()}</text>')
-                if i < n_count - 1:
-                    items.append(f'<text x="{chip_x + chip_w//2}" y="{cy + chip_h + 34}" font-family="{font_display}" font-size="30" font-weight="900" fill="#64748B" text-anchor="middle">↓</text>')
+        max_val_w = inner_w * 0.45
+        if len(value) * val_fsize * 0.65 > max_val_w:
+            val_fsize = max(40, int(max_val_w / (len(value) * 0.65)))
+
+        lbl_max_w = inner_w * 0.48
+        lbl_lines = wrap_text_to_width(label, lbl_max_w, lbl_fsize, 0.68)
+        if len(lbl_lines) > 2:
+            lbl_fsize = max(20, int(lbl_fsize * 0.8))
+            lbl_lines = wrap_text_to_width(label, lbl_max_w, lbl_fsize, 0.68)
+
+        stat_box_h = max(110, max(len(lbl_lines) * int(lbl_fsize * 1.2), val_fsize + 20) + 36)
+        total_h = stat_box_h + (cap_fsize + 36 if caption else 0)
+
+        start_y = box_y + (box_h - total_h) // 2
+        items = []
+
+        items.append(f'<rect x="{box_x + pad_x}" y="{start_y}" width="{inner_w}" height="{stat_box_h}" rx="16" fill="{card_bg}" stroke="#334155" stroke-width="2"/>')
+
+        lbl_start_y = start_y + (stat_box_h - (len(lbl_lines) * int(lbl_fsize * 1.2))) // 2 + int(lbl_fsize * 0.85)
+        for i, line in enumerate(lbl_lines):
+            items.append(f'<text x="{box_x + pad_x + 32}" y="{lbl_start_y + i * int(lbl_fsize * 1.2)}" font-family="{font_display}" font-size="{lbl_fsize}" font-weight="800" fill="{card_fg}" letter-spacing="2">{esc(line).upper()}</text>')
+
+        val_y = start_y + (stat_box_h // 2) + int(val_fsize * 0.35)
+        items.append(f'<text x="{box_x + box_w - pad_x - 32}" y="{val_y}" font-family="{font_display}" font-size="{val_fsize}" font-weight="900" fill="{val_color}" text-anchor="end">{esc(value)}</text>')
+
+        if caption:
+            cap_y = start_y + stat_box_h + 18
+            cap_lines = wrap_text_to_width(caption, inner_w - 40, cap_fsize, 0.60)
+            cap_box_h = len(cap_lines) * int(cap_fsize * 1.25) + 16
+            items.append(f'<rect x="{center_x - (inner_w * 0.4)}" y="{cap_y}" width="{inner_w * 0.8}" height="{cap_box_h}" rx="10" fill="#1E293B" stroke="#475569" stroke-width="1.5"/>')
+            for ci, cline in enumerate(cap_lines):
+                items.append(f'<text x="{center_x}" y="{cap_y + 14 + int(cap_fsize * 0.85) + ci * int(cap_fsize * 1.25)}" font-family="{font_display}" font-size="{cap_fsize}" font-weight="700" fill="#CBD5E1" text-anchor="middle" letter-spacing="1">{esc(cline).upper()}</text>')
 
         content_svg = "\n".join(items)
 
-    elif component == "StatCard":
-        label = esc(props.get("label", "METRIC"))
-        value = esc(props.get("value", "0"))
-        caption = esc(props.get("caption", ""))
-
-        if layout == "lower-third" and is_landscape:
-            items = [
-                f'<text x="{box_x + 50}" y="{box_y + 75}" font-family="{font_display}" font-size="28" font-weight="800" fill="#94A3B8" letter-spacing="2">{label.upper()}</text>',
-                f'<text x="{box_x + box_w - 60}" y="{box_y + 115}" font-family="{font_display}" font-size="74" font-weight="900" fill="{accent}" text-anchor="end">{value}</text>'
-            ]
-            if caption:
-                items.append(f'<text x="{box_x + 50}" y="{box_y + 135}" font-family="{font_display}" font-size="20" font-weight="600" fill="#CBD5E1">{caption}</text>')
-            content_svg = "\n".join(items)
-        else:
-            items = [
-                f'<text x="{box_x + 60}" y="{box_y + 90}" font-family="{font_display}" font-size="30" font-weight="800" fill="#94A3B8" letter-spacing="2">{label.upper()}</text>',
-                f'<text x="{box_x + box_w - 60}" y="{box_y + 160}" font-family="{font_display}" font-size="80" font-weight="900" fill="{accent}" text-anchor="end">{value}</text>'
-            ]
-            if caption:
-                items.append(f'<text x="{box_x + 60}" y="{box_y + 220}" font-family="{font_display}" font-size="24" font-weight="600" fill="#CBD5E1">{caption}</text>')
-            content_svg = "\n".join(items)
-
     elif component == "RuleCard":
-        kicker = esc(props.get("kicker", "BEST PRACTICE"))
-        text = esc(props.get("text", ""))
-        struck = esc(props.get("struck", ""))
+        kicker = str(props.get("kicker", "BEST PRACTICE") or "BEST PRACTICE").strip()
+        text = str(props.get("text", "") or "").strip()
+        struck = str(props.get("struck", "") or "").strip()
 
-        items = [
-            f'<text x="{box_x + 60}" y="{box_y + 80}" font-family="{font_mono}" font-size="22" font-weight="700" fill="#94A3B8" letter-spacing="4">{kicker.upper()}</text>',
-            f'<text x="{box_x + 60}" y="{box_y + 160}" font-family="{font_display}" font-size="40" font-weight="900" fill="{fg}">{text.upper()}</text>'
-        ]
-        if struck:
-            items.append(f'<text x="{box_x + 60}" y="{box_y + 230}" font-family="{font_display}" font-size="30" font-weight="700" fill="#EF4444">{struck.upper()}</text>')
+        kicker_fsize = 20 if is_landscape else 18
+        text_fsize = 46 if is_landscape else 38
+        struck_fsize = 28 if is_landscape else 24
+
+        text_lines = wrap_text_to_width(text, inner_w - 60, text_fsize, 0.65)
+        if len(text_lines) > 3:
+            text_fsize = 36 if is_landscape else 30
+            text_lines = wrap_text_to_width(text, inner_w - 60, text_fsize, 0.65)
+
+        struck_lines = wrap_text_to_width(struck, inner_w - 60, struck_fsize, 0.65) if struck else []
+
+        card_pad = 28
+        inner_card_w = inner_w
+        inner_card_h = (kicker_fsize + 14) + (len(text_lines) * int(text_fsize * 1.18)) + (card_pad * 2)
+        total_h = inner_card_h + ((len(struck_lines) * int(struck_fsize * 1.25) + 20) if struck else 0)
+
+        if total_h > inner_h:
+            s_ratio = (inner_h * 0.92) / total_h
+            text_fsize = max(22, int(text_fsize * s_ratio))
+            struck_fsize = max(18, int(struck_fsize * s_ratio))
+            text_lines = wrap_text_to_width(text, inner_w - 60, text_fsize, 0.65)
+            struck_lines = wrap_text_to_width(struck, inner_w - 60, struck_fsize, 0.65) if struck else []
+            inner_card_h = (kicker_fsize + 14) + (len(text_lines) * int(text_fsize * 1.18)) + (card_pad * 2)
+            total_h = inner_card_h + ((len(struck_lines) * int(struck_fsize * 1.25) + 20) if struck else 0)
+
+        start_y = box_y + (box_h - total_h) // 2
+        items = []
+
+        items.append(f'<rect x="{box_x + pad_x}" y="{start_y}" width="{inner_card_w}" height="{inner_card_h}" rx="18" fill="#FFFFFF"/>')
+
+        curr_y = start_y + card_pad + kicker_fsize
+        items.append(f'<text x="{box_x + pad_x + 36}" y="{curr_y}" font-family="{font_mono}" font-size="{kicker_fsize}" font-weight="700" fill="#64748B" letter-spacing="4">{esc(kicker).upper()}</text>')
+        curr_y += 18
+
+        for line in text_lines:
+            curr_y += int(text_fsize * 1.05)
+            items.append(f'<text x="{box_x + pad_x + 36}" y="{curr_y}" font-family="{font_display}" font-size="{text_fsize}" font-weight="900" fill="#0F172A">{esc(line).upper()}</text>')
+
+        if struck_lines:
+            curr_y = start_y + inner_card_h + 20
+            for sline in struck_lines:
+                curr_y += int(struck_fsize * 1.15)
+                s_width = len(sline) * struck_fsize * 0.65
+                strike_start_x = center_x - (s_width / 2)
+                items.append(f'<text x="{center_x}" y="{curr_y}" font-family="{font_display}" font-size="{struck_fsize}" font-weight="800" fill="#EF4444" text-anchor="middle" letter-spacing="2">{esc(sline).upper()}</text>')
+                items.append(f'<line x1="{strike_start_x - 10}" y1="{curr_y - struck_fsize * 0.32}" x2="{strike_start_x + s_width + 10}" y2="{curr_y - struck_fsize * 0.32}" stroke="#EF4444" stroke-width="4" stroke-linecap="round"/>')
+
         content_svg = "\n".join(items)
 
     elif component == "StrikethroughReveal":
         lines = props.get("lines", [])
-        items = [
-            f'<text x="{box_x + 60}" y="{box_y + 65}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" letter-spacing="2">DECISION &amp; BEST PRACTICE</text>'
-        ]
-        curr_y = box_y + 135
-        for i, l in enumerate(lines):
-            text = esc(l.get("text", ""))
-            struck = l.get("struck", False)
-            mark = l.get("mark", "none")
+        if not lines: lines = [{"text": "DECISION"}]
 
+        n_lines = len(lines)
+        base_fsize = 36 if is_landscape else 30
+        if n_lines > 3: base_fsize = 28 if is_landscape else 24
+
+        header_fsize = 18
+        items = [
+            f'<text x="{center_x}" y="{box_y + pad_y + header_fsize}" font-family="{font_display}" font-size="{header_fsize}" font-weight="700" fill="#94A3B8" letter-spacing="3" text-anchor="middle">DECISION &amp; VERDICT</text>'
+        ]
+
+        avail_h = inner_h - (header_fsize + 30)
+        row_h = avail_h // max(1, n_lines)
+        curr_y = box_y + pad_y + header_fsize + 24
+
+        for i, l in enumerate(lines):
+            raw_text = str(l.get("text", "") or "").strip()
+            struck = bool(l.get("struck", False))
+            mark = str(l.get("mark", "none"))
+
+            row_mid_y = curr_y + (row_h // 2)
             mark_svg = ""
+            text_x = box_x + pad_x + 50
+
             if mark == "cross":
-                mark_svg = f"""<g transform="translate({box_x + 75}, {curr_y - 10})">
-                  <circle cx="0" cy="0" r="16" fill="#EF4444" fill-opacity="0.25"/>
-                  <path d="M-6,-6 L6,6 M6,-6 L-6,6" stroke="#EF4444" stroke-width="3.5" stroke-linecap="round"/>
+                mark_svg = f"""<g transform="translate({box_x + pad_x + 24}, {row_mid_y - 2})">
+                  <circle cx="0" cy="0" r="15" fill="#EF4444" fill-opacity="0.25"/>
+                  <path d="M-5,-5 L5,5 M5,-5 L-5,5" stroke="#EF4444" stroke-width="3" stroke-linecap="round"/>
                 </g>"""
             elif mark == "check":
-                mark_svg = f"""<g transform="translate({box_x + 75}, {curr_y - 10})">
-                  <circle cx="0" cy="0" r="16" fill="#10B981" fill-opacity="0.25"/>
-                  <path d="M-7,0 L-2,5 L7,-5" stroke="#10B981" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+                mark_svg = f"""<g transform="translate({box_x + pad_x + 24}, {row_mid_y - 2})">
+                  <circle cx="0" cy="0" r="15" fill="#10B981" fill-opacity="0.25"/>
+                  <path d="M-6,0 L-2,4 L6,-4" stroke="#10B981" stroke-width="3" stroke-linecap="round" fill="none"/>
                 </g>"""
+            else:
+                text_x = box_x + pad_x + 20
 
+            max_text_w = inner_w - (70 if mark != "none" else 40)
+            wrapped = wrap_text_to_width(raw_text, max_text_w, base_fsize, 0.65)
             text_color = "#64748B" if struck else "#FFFFFF"
-            items.append(mark_svg)
-            items.append(f'<text x="{box_x + 110}" y="{curr_y}" font-family="{font_display}" font-size="30" font-weight="800" fill="{text_color}">{text.upper()}</text>')
 
-            if struck:
-                approx_w = min(box_w - 150, len(text) * 18)
-                items.append(f'<line x1="{box_x + 105}" y1="{curr_y - 10}" x2="{box_x + 115 + approx_w}" y2="{curr_y - 10}" stroke="#EF4444" stroke-width="4" stroke-linecap="round"/>')
-            curr_y += 75
+            items.append(mark_svg)
+            for li, wline in enumerate(wrapped):
+                line_y = row_mid_y + (li * int(base_fsize * 1.15)) + int(base_fsize * 0.3)
+                items.append(f'<text x="{text_x}" y="{line_y}" font-family="{font_display}" font-size="{base_fsize}" font-weight="800" fill="{text_color}">{esc(wline).upper()}</text>')
+                if struck:
+                    w_w = len(wline) * base_fsize * 0.65
+                    items.append(f'<line x1="{text_x - 6}" y1="{line_y - base_fsize * 0.32}" x2="{text_x + w_w + 6}" y2="{line_y - base_fsize * 0.32}" stroke="#EF4444" stroke-width="3.5" stroke-linecap="round"/>')
+
+            curr_y += row_h
+
         content_svg = "\n".join(items)
 
-    elif component in ["ScreenshotFrame", "BrowserFrame"]:
-        label = esc(props.get("label", "DASHBOARD"))
+    elif component == "FlowDiagram":
+        nodes = props.get("nodes", [])
+        if not nodes: nodes = ["A", "B"]
+        emphasize_last = props.get("emphasizeLast", True)
+        n_count = len(nodes)
+
         items = [
-            f'<rect x="{box_x}" y="{box_y}" width="{box_w}" height="48" rx="20" fill="#1E293B"/>',
-            f'<rect x="{box_x}" y="{box_y + 32}" width="{box_w}" height="16" fill="#1E293B"/>',
-            f'<circle cx="{box_x + 32}" cy="{box_y + 24}" r="6" fill="#EF4444"/>',
-            f'<circle cx="{box_x + 52}" cy="{box_y + 24}" r="6" fill="#F59E0B"/>',
-            f'<circle cx="{box_x + 72}" cy="{box_y + 24}" r="6" fill="#10B981"/>',
-            f'<text x="{box_x + box_w//2}" y="{box_y + 30}" font-family="{font_mono}" font-size="14" fill="#94A3B8" text-anchor="middle">convex-dashboard.local</text>',
-            f'<g transform="translate({box_x + 48}, {box_y + 80})">'
+            f'<text x="{center_x}" y="{box_y + pad_y + 18}" font-family="{font_display}" font-size="18" font-weight="700" fill="#94A3B8" letter-spacing="3" text-anchor="middle">ARCHITECTURE PIPELINE</text>'
+        ]
+
+        use_horizontal = is_landscape and n_count <= 4 and inner_w >= 600
+
+        if use_horizontal:
+            arrow_w = 40
+            total_arrow_w = (n_count - 1) * arrow_w
+            chip_w = (inner_w - total_arrow_w - 20) // n_count
+            chip_h = min(90, inner_h - 80)
+            chip_y = box_y + (box_h - chip_h) // 2 + 10
+            start_x = box_x + pad_x + (inner_w - (n_count * chip_w + total_arrow_w)) // 2
+
+            for i, node in enumerate(nodes):
+                cx = start_x + i * (chip_w + arrow_w)
+                is_emph = (i == n_count - 1 and emphasize_last)
+                bg = accent if is_emph else "#1E293B"
+                text_color = "#0F172A" if is_emph else "#FFFFFF"
+                border_color = accent if is_emph else "#475569"
+
+                node_str = esc(str(node)).upper()
+                node_fsize = 20
+                if len(node_str) * node_fsize * 0.65 > (chip_w - 20):
+                    node_fsize = max(14, int((chip_w - 20) / (len(node_str) * 0.65)))
+
+                items.append(f'<rect x="{cx}" y="{chip_y}" width="{chip_w}" height="{chip_h}" rx="14" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
+                items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + chip_h//2 + int(node_fsize * 0.35)}" font-family="{font_display}" font-size="{node_fsize}" font-weight="800" fill="{text_color}" text-anchor="middle">{node_str}</text>')
+                if i < n_count - 1:
+                    items.append(f'<text x="{cx + chip_w + arrow_w//2}" y="{chip_y + chip_h//2 + 8}" font-family="{font_display}" font-size="28" font-weight="900" fill="#64748B" text-anchor="middle">→</text>')
+
+        else:
+            arrow_h = 36
+            total_arrow_h = (n_count - 1) * arrow_h
+            avail_h = inner_h - 60 - total_arrow_h
+            chip_h = min(75, avail_h // n_count)
+            chip_w = min(680, inner_w - 30)
+            chip_x = center_x - (chip_w // 2)
+
+            total_stack_h = (n_count * chip_h) + total_arrow_h
+            start_y = box_y + pad_y + 40 + (inner_h - 40 - total_stack_h) // 2
+
+            for i, node in enumerate(nodes):
+                cy = start_y + i * (chip_h + arrow_h)
+                is_emph = (i == n_count - 1 and emphasize_last)
+                bg = accent if is_emph else "#1E293B"
+                text_color = "#0F172A" if is_emph else "#FFFFFF"
+                border_color = accent if is_emph else "#475569"
+
+                node_str = esc(str(node)).upper()
+                node_fsize = 24
+                if len(node_str) * node_fsize * 0.65 > (chip_w - 30):
+                    node_fsize = max(16, int((chip_w - 30) / (len(node_str) * 0.65)))
+
+                items.append(f'<rect x="{chip_x}" y="{cy}" width="{chip_w}" height="{chip_h}" rx="14" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
+                items.append(f'<text x="{center_x}" y="{cy + chip_h//2 + int(node_fsize * 0.35)}" font-family="{font_display}" font-size="{node_fsize}" font-weight="800" fill="{text_color}" text-anchor="middle">{node_str}</text>')
+                if i < n_count - 1:
+                    items.append(f'<text x="{center_x}" y="{cy + chip_h + arrow_h//2 + 7}" font-family="{font_display}" font-size="24" font-weight="900" fill="#64748B" text-anchor="middle">↓</text>')
+
+        content_svg = "\n".join(items)
+
+    elif component == "TerminalMock":
+        windows = props.get("windows", [])
+        if not windows:
+            windows = [{"title": "terminal-01", "lines": ["$ ossclip transcribe input.mp4", "> Processing Float16 CUDA..."]}]
+        fan_out = str(props.get("fanOut", "") or "").strip()
+
+        win = windows[0]
+        w_title = str(win.get("title", "bash") or "bash").strip()
+        w_lines = win.get("lines", [])
+
+        term_fsize = 22 if is_landscape else 20
+        win_w = inner_w
+        win_h = inner_h - (40 if fan_out else 0)
+        start_y = box_y + pad_y
+
+        items = [
+            f'<rect x="{box_x + pad_x}" y="{start_y}" width="{win_w}" height="{win_h}" rx="16" fill="#0B0F19" stroke="#334155" stroke-width="2"/>',
+            f'<rect x="{box_x + pad_x}" y="{start_y}" width="{win_w}" height="42" rx="16" fill="#1E293B"/>',
+            f'<rect x="{box_x + pad_x}" y="{start_y + 26}" width="{win_w}" height="16" fill="#1E293B"/>',
+            f'<circle cx="{box_x + pad_x + 24}" cy="{start_y + 21}" r="6" fill="#EF4444"/>',
+            f'<circle cx="{box_x + pad_x + 42}" cy="{start_y + 21}" r="6" fill="#F59E0B"/>',
+            f'<circle cx="{box_x + pad_x + 60}" cy="{start_y + 21}" r="6" fill="#10B981"/>',
+            f'<text x="{center_x}" y="{start_y + 27}" font-family="{font_mono}" font-size="15" fill="#94A3B8" text-anchor="middle">{esc(w_title)}</text>'
+        ]
+
+        curr_ly = start_y + 70
+        for line in w_lines:
+            l_str = str(line).strip()
+            if l_str.startswith("$"):
+                cmd_str = l_str[1:].strip()
+                items.append(f'<text x="{box_x + pad_x + 28}" y="{curr_ly}" font-family="{font_mono}" font-size="{term_fsize}" font-weight="700" fill="{accent}">$ <tspan fill="#FFFFFF">{esc(cmd_str)}</tspan></text>')
+            elif l_str.startswith(">"):
+                items.append(f'<text x="{box_x + pad_x + 28}" y="{curr_ly}" font-family="{font_mono}" font-size="{term_fsize}" font-weight="600" fill="#38BDF8">&gt; <tspan fill="#CBD5E1">{esc(l_str[1:].strip())}</tspan></text>')
+            else:
+                items.append(f'<text x="{box_x + pad_x + 28}" y="{curr_ly}" font-family="{font_mono}" font-size="{term_fsize}" font-weight="500" fill="#94A3B8">{esc(l_str)}</text>')
+            curr_ly += int(term_fsize * 1.5)
+
+        if fan_out:
+            items.append(f'<text x="{center_x}" y="{start_y + win_h + 30}" font-family="{font_mono}" font-size="18" font-weight="800" fill="{accent}" text-anchor="middle" letter-spacing="2">⌄ {esc(fan_out).upper()}</text>')
+
+        content_svg = "\n".join(items)
+
+    elif component == "ChatMock":
+        keyword = str(props.get("keyword", "") or "").strip()
+        messages = props.get("messages", [])
+
+        if keyword:
+            cta_text = f'"{keyword.upper()}"'
+            cta_fsize = 64 if is_landscape else 54
+            max_w = inner_w * 0.80
+            if len(cta_text) * cta_fsize * 0.65 > max_w:
+                cta_fsize = max(32, int(max_w / (len(cta_text) * 0.65)))
+
+            b_w = len(cta_text) * cta_fsize * 0.65 + 60
+            b_h = cta_fsize * 1.5 + 30
+            bx = center_x - (b_w / 2)
+            by = box_y + (box_h - b_h) // 2
+
+            items = [
+                f'<text x="{center_x}" y="{by - 24}" font-family="{font_display}" font-size="18" font-weight="700" fill="#94A3B8" letter-spacing="3" text-anchor="middle">COMMENT KEYWORD BELOW</text>',
+                f'<rect x="{bx}" y="{by}" width="{b_w}" height="{b_h}" rx="24" fill="{accent}" stroke="#FFFFFF" stroke-width="2"/>',
+                f'<text x="{center_x}" y="{by + b_h//2 + int(cta_fsize * 0.35)}" font-family="{font_display}" font-size="{cta_fsize}" font-weight="900" fill="#0F172A" text-anchor="middle">{esc(cta_text)}</text>'
+            ]
+            content_svg = "\n".join(items)
+
+        else:
+            if not messages: messages = [{"from": "user", "text": "Hello"}]
+            items = [
+                f'<text x="{center_x}" y="{box_y + pad_y + 18}" font-family="{font_display}" font-size="18" font-weight="700" fill="#94A3B8" letter-spacing="3" text-anchor="middle">DIRECT CONVERSATION</text>'
+            ]
+            chat_fsize = 26 if is_landscape else 22
+            curr_by = box_y + pad_y + 50
+
+            for i, msg in enumerate(messages[:3]):
+                is_user = (msg.get("from") == "user")
+                mtext = str(msg.get("text", "")).strip()
+
+                wrapped = wrap_text_to_width(mtext, inner_w * 0.65, chat_fsize, 0.60)
+                bub_w = min(inner_w * 0.75, max(len(l) for l in wrapped) * chat_fsize * 0.60 + 44)
+                bub_h = len(wrapped) * int(chat_fsize * 1.25) + 24
+
+                bub_x = (box_x + box_w - pad_x - bub_w) if is_user else (box_x + pad_x)
+                bub_bg = accent if is_user else "#1E293B"
+                bub_fg = "#0F172A" if is_user else "#FFFFFF"
+
+                items.append(f'<rect x="{bub_x}" y="{curr_by}" width="{bub_w}" height="{bub_h}" rx="18" fill="{bub_bg}" stroke="#475569" stroke-width="1.5"/>')
+                for li, lstr in enumerate(wrapped):
+                    items.append(f'<text x="{bub_x + 22}" y="{curr_by + 16 + int(chat_fsize * 0.85) + li * int(chat_fsize * 1.25)}" font-family="{font_display}" font-size="{chat_fsize}" font-weight="700" fill="{bub_fg}">{esc(lstr)}</text>')
+
+                curr_by += bub_h + 16
+
+            content_svg = "\n".join(items)
+
+    elif component in ["ScreenshotFrame", "BrowserFrame"]:
+        label = str(props.get("label", "DASHBOARD") or "DASHBOARD").strip()
+        items = [
+            f'<rect x="{box_x + pad_x}" y="{box_y + pad_y}" width="{inner_w}" height="42" rx="14" fill="#1E293B"/>',
+            f'<rect x="{box_x + pad_x}" y="{box_y + pad_y + 26}" width="{inner_w}" height="16" fill="#1E293B"/>',
+            f'<circle cx="{box_x + pad_x + 24}" cy="{box_y + pad_y + 21}" r="6" fill="#EF4444"/>',
+            f'<circle cx="{box_x + pad_x + 42}" cy="{box_y + pad_y + 21}" r="6" fill="#F59E0B"/>',
+            f'<circle cx="{box_x + pad_x + 60}" cy="{box_y + pad_y + 21}" r="6" fill="#10B981"/>',
+            f'<text x="{center_x}" y="{box_y + pad_y + 27}" font-family="{font_mono}" font-size="14" fill="#94A3B8" text-anchor="middle">app.preview.local</text>',
+            f'<g transform="translate({box_x + pad_x + 36}, {box_y + pad_y + 65})">'
         ]
         skeleton_widths = [0.90, 0.75, 0.85, 0.60, 0.80]
         s_y = 20
         for i, w_frac in enumerate(skeleton_widths):
-            line_w = int((box_w - 96) * w_frac)
-            color = "#334155" if i % 3 == 0 else "#1E293B"
-            items.append(f'<rect x="0" y="{s_y}" width="{line_w}" height="22" rx="6" fill="{color}"/>')
-            s_y += 40
+            line_w = int((inner_w - 72) * w_frac)
+            color = "#334155" if i % 2 == 0 else "#1E293B"
+            items.append(f'<rect x="0" y="{s_y}" width="{line_w}" height="20" rx="6" fill="{color}"/>')
+            s_y += 36
         items.append('</g>')
-        items.append(f"""<g transform="translate({box_x + box_w - 200}, {box_y + box_h - 38})">
-          <rect x="0" y="0" width="180" height="46" rx="10" fill="#FFFFFF"/>
-          <text x="90" y="30" font-family="{font_display}" font-size="18" font-weight="900" fill="#0F172A" text-anchor="middle" letter-spacing="3">{label.upper()}</text>
+
+        chip_w = len(label) * 16 + 40
+        items.append(f"""<g transform="translate({box_x + box_w - pad_x - chip_w}, {box_y + box_h - pad_y - 44})">
+          <rect x="0" y="0" width="{chip_w}" height="40" rx="10" fill="#FFFFFF"/>
+          <text x="{chip_w // 2}" y="26" font-family="{font_display}" font-size="16" font-weight="900" fill="#0F172A" text-anchor="middle" letter-spacing="3">{esc(label).upper()}</text>
         </g>""")
         content_svg = "\n".join(items)
 
     elif component == "BulletList":
-        title = esc(props.get("title", ""))
+        title = str(props.get("title", "") or "").strip()
         items_data = props.get("items", [])
+        if not items_data: items_data = ["FIRST POINT", "SECOND POINT"]
+
+        b_fsize = 32 if is_landscape else 26
+        n_items = len(items_data)
+        if n_items > 3: b_fsize = 26 if is_landscape else 22
+
         items = []
-        curr_y = box_y + 70
+        curr_y = box_y + pad_y + 24
         if title:
-            items.append(f'<text x="{box_x + 60}" y="{curr_y}" font-family="{font_display}" font-size="22" font-weight="700" fill="#94A3B8" letter-spacing="2">{title.upper()}</text>')
-            curr_y += 50
+            items.append(f'<text x="{box_x + pad_x + 20}" y="{curr_y}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" letter-spacing="3">{esc(title).upper()}</text>')
+            curr_y += 38
+
         for itm in items_data:
-            items.append(f'<text x="{box_x + 60}" y="{curr_y}" font-family="{font_display}" font-size="28" font-weight="900" fill="{accent}">▸</text>')
-            items.append(f'<text x="{box_x + 95}" y="{curr_y}" font-family="{font_display}" font-size="28" font-weight="800" fill="{fg}">{esc(itm).upper()}</text>')
-            curr_y += 55
+            wrapped = wrap_text_to_width(str(itm), inner_w - 80, b_fsize, 0.65)
+            for li, wline in enumerate(wrapped):
+                if li == 0:
+                    items.append(f'<text x="{box_x + pad_x + 20}" y="{curr_y}" font-family="{font_display}" font-size="{int(b_fsize * 0.85)}" font-weight="900" fill="{accent}">▸</text>')
+                items.append(f'<text x="{box_x + pad_x + 52}" y="{curr_y}" font-family="{font_display}" font-size="{b_fsize}" font-weight="800" fill="{fg}">{esc(wline).upper()}</text>')
+                curr_y += int(b_fsize * 1.25)
+            curr_y += 10
+
         content_svg = "\n".join(items)
 
     else:
-        title = esc(props.get("title", component))
-        content_svg = f'<text x="{box_x + box_w//2}" y="{box_y + box_h//2}" font-family="{font_display}" font-size="40" font-weight="900" fill="{fg}" text-anchor="middle">{title}</text>'
+        title = str(props.get("title", component) or component)
+        content_svg = f'<text x="{center_x}" y="{box_y + box_h//2 + 10}" font-family="{font_display}" font-size="36" font-weight="900" fill="{fg}" text-anchor="middle">{esc(title).upper()}</text>'
 
     return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -561,7 +883,7 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
     </filter>
   </defs>
   <g {transform_attr} filter="url(#shadow)">
-    <rect x="{box_x}" y="{box_y}" width="{box_w}" height="{box_h}" rx="20" fill="#0F172A" fill-opacity="0.95" stroke="#334155" stroke-width="2"/>
+    <rect x="{box_x}" y="{box_y}" width="{box_w}" height="{box_h}" rx="22" fill="#0F172A" fill-opacity="0.95" stroke="#334155" stroke-width="2"/>
     {content_svg}
   </g>
 </svg>"""
