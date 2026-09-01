@@ -1053,18 +1053,22 @@ def main():
         pid = os.getpid()
 
         for idx, cue in enumerate(scene_cues):
-            comp = cue.get("component")
-            if not comp or comp == "None" or cue.get("kind") == "plain":
-                continue
-
             cue_id = cue.get("id", f"scene-{idx}")
             sc_override = scene_overrides.get(cue_id, {}) or scene_overrides.get(f"scene-{idx}", {})
 
             if sc_override.get("hidden") is True:
                 continue
 
+            comp = sc_override.get("component", cue.get("component"))
+            if not comp or comp == "None" or (cue.get("kind") == "plain" and not sc_override.get("component")):
+                continue
+
             props = {**cue.get("props", {}), **sc_override.get("props", {})}
             elem_transforms = sc_override.get("elements", {})
+            for elem_id, elem_data in elem_transforms.items():
+                if isinstance(elem_data, dict) and "text" in elem_data and elem_data["text"] is not None:
+                    props[elem_id] = elem_data["text"]
+
             card_transform = elem_transforms.get("card", {}) or elem_transforms.get("root", {})
             dx = card_transform.get("dx", 0)
             dy = card_transform.get("dy", 0)
