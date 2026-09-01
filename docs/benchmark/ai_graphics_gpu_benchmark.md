@@ -75,3 +75,70 @@ All 6 themes are rendered at **1080p Full HD (1920x1080)** and composited on the
 | **5. Tokyo Night** | Cairo Vector (SVG) | Razor-Sharp (HD) | **28.5 FPS** | 12 ms | ~40 MB |
 | **6. Vercel Geist** | Cairo Vector (SVG) | Razor-Sharp (HD) | **28.5 FPS** | 12 ms | ~40 MB |
 | *Legacy Remotion* | Headless Chromium | Fuzzy / Low | 9.2 FPS | 2,400 ms | ~1.8 GB |
+
+---
+
+## 🎬 Beyond Static Graphics: Manim vs Remotion with GPU
+
+We evaluated **Manim** (Python vector animation engine used by 3Blue1Brown) and **Remotion with GPU Acceleration** (React-based video engine).
+
+---
+
+### 1. Manim (Python Vector Animation Engine) 🐍📐
+
+**Manim Community Edition (v0.21.0)** is installed and verified on this system. It generates programmatic, animated vector graphics (arrows that grow, nodes that pulse, code that types onto screen) with a **100% transparent background (`--transparent` / `-t`)**:
+
+* **Rendering Output:** Rendered a 3-second 1080p 60fps animated technical flowchart (`TechnicalFlowScene.mov`) in **14 seconds**.
+* **Compositing:** The transparent `.mov` / `.webm` overlay streams directly into FFmpeg with NVENC hardware acceleration at real-time speeds.
+* **Key Capabilities:**
+  - `GrowArrow(arrow)`: Dynamic directional data flow.
+  - `Indicate(node)`: Glowing emphasis on active cloud services.
+  - `Write(code)`: Live typing effect for terminal and code.
+  - `ReplacementTransform`: Morphing one architecture diagram into another.
+
+#### Manim Rendered Frame (Composited on 1080p Video):
+![Manim Animated Flowchart](./images/manim_animated_flowchart.png)
+
+---
+
+### 2. Remotion with GPU Hardware Acceleration ⚛️⚡
+
+Remotion can utilize the **Tesla T4 GPU** through two distinct acceleration layers:
+
+#### A. Hardware-Accelerated Encoding (NVENC)
+By default, Remotion encodes video using CPU software. Adding the hardware acceleration flag activates NVIDIA's hardware encoder (`h264_nvenc`):
+```bash
+npx remotion render MyComposition \
+  --hardware-acceleration=if-possible \
+  --gl=angle-egl \
+  --chrome-mode=chrome-for-testing \
+  --enable-multi-process-on-linux=true
+```
+In Node.js / TypeScript:
+```typescript
+await renderMedia({
+  composition,
+  serveUrl,
+  codec: "h264",
+  hardwareAcceleration: "if-possible", // Activates NVENC on Linux
+  chromiumOptions: {
+    gl: "angle-egl",                  // Cloud GPU rendering (EGL)
+    enableMultiProcessOnLinux: true,
+  },
+});
+```
+
+#### B. GPU Accelerated Canvas & WebGL (`--gl=angle-egl`)
+In headless Linux environments without a display server (X11), Chromium disables the GPU by default. 
+- Passing `--gl=angle-egl` bridges Chromium to NVIDIA's native EGL driver for hardware 2D Canvas and WebGL acceleration.
+- `--gl=swangle` is the fallback for CPU instances.
+
+---
+
+### 📊 Engine Comparison Matrix
+
+| Engine | Language | Animation Power | GPU Encoding | Asset Prep / Render Speed | Best Use Case |
+|:---|:---:|:---:|:---:|:---:|:---|
+| **Manim** | Python | ⭐⭐⭐⭐⭐ (Physics, morphing, math, live arrows) | Transparent MOV / NVENC overlay | ~12–15s per scene | Animated system flows, math, morphing diagrams |
+| **Remotion (GPU)** | React / TS | ⭐⭐⭐⭐ (React components, CSS, Tailwind, Spring) | NVENC (`--hardware-acceleration=if-possible`) | ~20–35s per scene | Web-style UI mockups, rich React card layouts |
+| **Cairo Vector (SVG)** | Python / C | ⭐⭐⭐ (Slide-ins, dissolves, keyframe fades) | 28.5 FPS (Realtime NVENC) | **12 ms** (Instant) | Ultra-fast high-contrast static HUDs, cards, matrices |
