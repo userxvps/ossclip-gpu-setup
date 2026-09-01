@@ -275,6 +275,10 @@ def format_ass_time(seconds):
     if cs >= 100: cs = 99
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
+def esc(text):
+    if text is None: return ""
+    return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
 def subtract_user_cuts(spans, user_cuts):
     """Applies cuts made by user in the Web Interface (overrides.cuts)."""
     current_spans = [(s["srcIn"], s["srcOut"]) for s in spans]
@@ -292,154 +296,182 @@ def subtract_user_cuts(spans, user_cuts):
         current_spans = new_spans
     return [{"srcIn": s[0], "srcOut": s[1]} for s in current_spans]
 
-def generate_cairo_svg(style, data, w=1920, h=1080):
-    """Generates razor-sharp HD vector SVG in the requested style with user layout and text edits."""
-    dx = data.get("dx", 0)
-    dy = data.get("dy", 0)
-    scale = data.get("scale", 1.0)
-    transform_attr = f'transform="translate({dx}, {dy}) scale({scale})"' if (dx != 0 or dy != 0 or scale != 1.0) else ''
+def generate_scene_component_svg(component, props, layout="lower-third", theme=None, dx=0, dy=0, scale=1.0, w=1920, h=1080):
+    """Renders the EXACT component displayed in the OSSClip Web Editor with full layout & text edits."""
+    if not theme: theme = {}
+    accent = theme.get("accent", "#FFE600")
+    fg = theme.get("fg", "#FFFFFF")
+    card_bg = theme.get("cardBg", "#0F172A")
+    card_border = theme.get("cardBorder", "#334155")
+    font_display = theme.get("fontDisplay", "Montserrat")
+    font_mono = theme.get("fontMono", "JetBrains Mono")
 
-    if style == "tokyo-night":
-        title = str(data.get("title", "convex/files.ts")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        lines = data.get("lines", [
+    # Placement based on Web Editor layout mode
+    if layout == "split-left":
+        box_x, box_y, box_w, box_h = 100, 260, 800, 560
+    elif layout == "split-right":
+        box_x, box_y, box_w, box_h = 1020, 260, 800, 560
+    elif layout in ["blurred-behind", "full-bleed"]:
+        box_x, box_y, box_w, box_h = 240, 620, 1440, 380
+    else: # lower-third
+        box_x, box_y, box_w, box_h = 240, 660, 1440, 340
+
+    transform_attr = f'transform="translate({dx}, {dy}) scale({scale})"' if (dx != 0 or dy != 0 or scale != 1.0) else ''
+    content_svg = ""
+
+    if component == "TitleCard":
+        eyebrow = esc(props.get("eyebrow", ""))
+        title = esc(props.get("title", ""))
+        sub = esc(props.get("sub", ""))
+        emphasis = esc(props.get("emphasis", ""))
+
+        items = []
+        curr_y = box_y + 80
+        if eyebrow:
+            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="28" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">{eyebrow.upper()}</text>')
+            curr_y += 75
+        if emphasis:
+            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="110" font-weight="900" fill="{accent}" text-anchor="middle">{emphasis}</text>')
+            curr_y += 100
+        if title:
+            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="64" font-weight="900" fill="{fg}" text-anchor="middle">{title.upper()}</text>')
+            curr_y += 65
+        if sub and sub.lower() != title.lower():
+            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="30" font-weight="600" fill="#CBD5E1" text-anchor="middle">{sub}</text>')
+        content_svg = "\n".join(items)
+
+    elif component == "FlowDiagram":
+        nodes = props.get("nodes", [])
+        emphasize_last = props.get("emphasizeLast", True)
+        n_count = len(nodes)
+        chip_w = min(360, (box_w - (n_count * 80)) // max(1, n_count))
+        total_w = n_count * chip_w + (n_count - 1) * 70
+        start_x = box_x + (box_w - total_w) // 2
+        chip_y = box_y + box_h // 2 - 45
+
+        items = [
+            f'<text x="{box_x + 60}" y="{box_y + 65}" font-family="{font_display}" font-size="22" font-weight="700" fill="#94A3B8" letter-spacing="2">ARCHITECTURE FLOW</text>'
+        ]
+        for i, node in enumerate(nodes):
+            cx = start_x + i * (chip_w + 70)
+            is_emph = (i == n_count - 1 and emphasize_last)
+            bg = accent if is_emph else "#1E293B"
+            text_color = "#0F172A" if is_emph else "#FFFFFF"
+            border_color = accent if is_emph else "#475569"
+
+            items.append(f'<rect x="{cx}" y="{chip_y}" width="{chip_w}" height="90" rx="16" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
+            items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + 55}" font-family="{font_display}" font-size="22" font-weight="800" fill="{text_color}" text-anchor="middle">{esc(node).upper()}</text>')
+
+            if i < n_count - 1:
+                items.append(f'<text x="{cx + chip_w + 35}" y="{chip_y + 55}" font-family="{font_display}" font-size="36" font-weight="900" fill="#64748B" text-anchor="middle">→</text>')
+        content_svg = "\n".join(items)
+
+    elif component == "StatCard":
+        label = esc(props.get("label", "METRIC"))
+        value = esc(props.get("value", "0"))
+        caption = esc(props.get("caption", ""))
+
+        items = [
+            f'<text x="{box_x + 80}" y="{box_y + 130}" font-family="{font_display}" font-size="44" font-weight="800" fill="#94A3B8" letter-spacing="2">{label.upper()}</text>',
+            f'<text x="{box_x + box_w - 80}" y="{box_y + 190}" font-family="{font_display}" font-size="110" font-weight="900" fill="{accent}" text-anchor="end">{value}</text>'
+        ]
+        if caption:
+            items.append(f'<text x="{box_x + 80}" y="{box_y + 240}" font-family="{font_display}" font-size="28" font-weight="600" fill="#CBD5E1">{caption}</text>')
+        content_svg = "\n".join(items)
+
+    elif component == "StrikethroughReveal":
+        lines = props.get("lines", [])
+        items = [
+            f'<text x="{box_x + 60}" y="{box_y + 65}" font-family="{font_display}" font-size="22" font-weight="700" fill="#94A3B8" letter-spacing="2">COMPARISON &amp; DECISION</text>'
+        ]
+        curr_y = box_y + 140
+        for i, l in enumerate(lines):
+            text = esc(l.get("text", ""))
+            struck = l.get("struck", False)
+            mark = l.get("mark", "none")
+
+            mark_svg = ""
+            if mark == "cross":
+                mark_svg = f'<text x="{box_x + 80}" y="{curr_y}" font-family="{font_display}" font-size="38" font-weight="900" fill="#EF4444">✗</text>'
+            elif mark == "check":
+                mark_svg = f'<text x="{box_x + 80}" y="{curr_y}" font-family="{font_display}" font-size="38" font-weight="900" fill="#10B981">✓</text>'
+
+            text_color = "#64748B" if struck else "#FFFFFF"
+            items.append(mark_svg)
+            items.append(f'<text x="{box_x + 130}" y="{curr_y}" font-family="{font_display}" font-size="38" font-weight="800" fill="{text_color}">{text.upper()}</text>')
+
+            if struck:
+                approx_w = len(text) * 24
+                items.append(f'<line x1="{box_x + 125}" y1="{curr_y - 12}" x2="{box_x + 135 + approx_w}" y2="{curr_y - 12}" stroke="#EF4444" stroke-width="4"/>')
+            curr_y += 75
+        content_svg = "\n".join(items)
+
+    elif component in ["ScreenshotFrame", "BrowserFrame"]:
+        label = esc(props.get("label", "DASHBOARD"))
+        items = [
+            f'<rect x="{box_x + 40}" y="{box_y + 40}" width="{box_w - 80}" height="44" rx="8" fill="#1E293B"/>',
+            f'<circle cx="{box_x + 70}" cy="{box_y + 62}" r="6" fill="#EF4444"/>',
+            f'<circle cx="{box_x + 90}" cy="{box_y + 62}" r="6" fill="#F59E0B"/>',
+            f'<circle cx="{box_x + 110}" cy="{box_y + 62}" r="6" fill="#10B981"/>',
+            f'<text x="{box_x + 140}" y="{box_y + 69}" font-family="{font_mono}" font-size="16" fill="#94A3B8">{label.upper()}</text>',
+            f'<rect x="{box_x + 40}" y="{box_y + 100}" width="{box_w - 80}" height="{box_h - 140}" rx="12" fill="#0B132B" stroke="#1E293B" stroke-width="2"/>',
+            f'<text x="{box_x + box_w//2}" y="{box_y + box_h//2}" font-family="{font_display}" font-size="36" font-weight="800" fill="{accent}" text-anchor="middle">LIVE DEMO • {label}</text>'
+        ]
+        content_svg = "\n".join(items)
+
+    elif component in ["TerminalMock", "terminal", "tokyo-night"]:
+        title = esc(props.get("title", "convex/files.ts"))
+        lines = props.get("lines", [
             'import { mutation } from "./_generated/server";',
-            '',
             'export const generateUploadUrl = mutation({',
-            '  handler: async (ctx) => {',
-            '    // Bypasses Vercel 4.5MB Serverless Payload Ceiling',
-            '    return await ctx.storage.generateUploadUrl();',
-            '  },',
+            '  handler: async (ctx) => await ctx.storage.generateUploadUrl()',
             '});'
         ])
-        code_spans = []
-        for i, l in enumerate(lines):
+        items = [
+            f'<rect x="{box_x}" y="{box_y}" width="{box_w}" height="48" rx="20" fill="#1E293B"/>',
+            f'<circle cx="{box_x + 30}" cy="{box_y + 24}" r="6" fill="#EF4444"/>',
+            f'<circle cx="{box_x + 50}" cy="{box_y + 24}" r="6" fill="#F59E0B"/>',
+            f'<circle cx="{box_x + 70}" cy="{box_y + 24}" r="6" fill="#10B981"/>',
+            f'<text x="{box_x + 100}" y="{box_y + 30}" font-family="{font_mono}" font-size="15" fill="#94A3B8">{title}</text>'
+        ]
+        for i, l in enumerate(lines[:7]):
             line_no = f"{i+1:02d}"
-            escaped = str(l).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            code_spans.append(f'<text x="1010" y="{720 + i*36}" font-family="JetBrains Mono" font-size="18" fill="#444B6A">{line_no}</text><text x="1055" y="{720 + i*36}" font-family="JetBrains Mono" font-size="18" fill="#C0CAF5">{escaped}</text>')
-        code_xml = "\n".join(code_spans)
+            escaped = esc(l)
+            items.append(f'<text x="{box_x + 40}" y="{box_y + 90 + i*36}" font-family="{font_mono}" font-size="18" fill="#475569">{line_no}</text>')
+            items.append(f'<text x="{box_x + 85}" y="{box_y + 90 + i*36}" font-family="{font_mono}" font-size="18" fill="#C0CAF5">{escaped}</text>')
+        content_svg = "\n".join(items)
 
-        return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
+    elif component == "BulletList":
+        heading = esc(props.get("heading", "KEY POINTS"))
+        items_list = props.get("items", [])
+        items = [
+            f'<text x="{box_x + 60}" y="{box_y + 70}" font-family="{font_display}" font-size="32" font-weight="900" fill="{accent}">{heading.upper()}</text>'
+        ]
+        for i, item in enumerate(items_list[:4]):
+            items.append(f'<circle cx="{box_x + 80}" cy="{box_y + 130 + i*55}" r="7" fill="{accent}"/>')
+            items.append(f'<text x="{box_x + 110}" y="{box_y + 137 + i*55}" font-family="{font_display}" font-size="28" font-weight="700" fill="#FFFFFF">{esc(item)}</text>')
+        content_svg = "\n".join(items)
+
+    else:
+        title = esc(props.get("title", component))
+        content_svg = f'<text x="{box_x + box_w//2}" y="{box_y + box_h//2}" font-family="{font_display}" font-size="44" font-weight="900" fill="{fg}" text-anchor="middle">{title}</text>'
+
+    return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
       <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#000000" flood-opacity="0.85"/>
     </filter>
   </defs>
   <g {transform_attr} filter="url(#shadow)">
-    <rect x="980" y="630" width="860" height="390" rx="18" fill="#16161E" stroke="#2A2E3D" stroke-width="2"/>
-    <rect x="980" y="630" width="860" height="48" rx="18" fill="#1F2335"/>
-    <line x1="980" y1="678" x2="1840" y2="678" stroke="#2A2E3D" stroke-width="1"/>
-    <circle cx="1008" cy="654" r="7" fill="#FF5F56"/>
-    <circle cx="1030" cy="654" r="7" fill="#FFBD2E"/>
-    <circle cx="1052" cy="654" r="7" fill="#27C93F"/>
-    <rect x="1078" y="638" width="220" height="32" rx="6" fill="#16161E"/>
-    <text x="1095" y="660" font-family="JetBrains Mono" font-size="14" fill="#A9B1D6" font-weight="600">{title}</text>
-    {code_xml}
-  </g>
-</svg>"""
-    elif style == "stripe":
-        t1 = str(data.get("left_title", "Vercel Serverless &amp; Actions")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        t2 = str(data.get("right_title", "Convex Pre-Signed Upload")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        header_text = str(data.get("title", "TECHNICAL LIMITS &amp; ARCHITECTURE MATRIX")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="24" stdDeviation="35" flood-color="#000000" flood-opacity="0.85"/>
-    </filter>
-  </defs>
-  <g {transform_attr} filter="url(#shadow)">
-    <rect x="280" y="640" width="1360" height="380" rx="24" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
-    <rect x="280" y="640" width="1360" height="52" rx="24" fill="#F8FAFC"/>
-    <line x1="280" y1="692" x2="1640" y2="692" stroke="#E2E8F0" stroke-width="1.5"/>
-    <circle cx="310" cy="666" r="6" fill="#EF4444"/><circle cx="330" cy="666" r="6" fill="#F59E0B"/><circle cx="350" cy="666" r="6" fill="#10B981"/>
-    <text x="380" y="673" font-family="Montserrat" font-size="15" fill="#475569" font-weight="700">{header_text}</text>
-    <rect x="320" y="725" width="620" height="260" rx="16" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.5"/>
-    <rect x="345" y="745" width="120" height="28" rx="6" fill="#EF4444"/>
-    <text x="358" y="764" font-family="Montserrat" font-size="13" fill="#FFFFFF" font-weight="800">REJECTED</text>
-    <text x="345" y="810" font-family="Montserrat" font-size="22" fill="#991B1B" font-weight="800">{t1}</text>
-    <text x="345" y="845" font-family="Rubik" font-size="16" fill="#7F1D1D" font-weight="600">• 4.5 MB Serverless Payload Maximum</text>
-    <text x="345" y="875" font-family="Rubik" font-size="16" fill="#7F1D1D" font-weight="600">• 1.0 MB Server Action Body Ceiling</text>
-    <text x="345" y="905" font-family="Rubik" font-size="16" fill="#7F1D1D" font-weight="600">• Unusable for high-res media files</text>
-    <text x="345" y="945" font-family="Rubik" font-size="15" fill="#DC2626" font-weight="700">Outcome: Fails with 413 Payload Too Large</text>
-    <rect x="980" y="725" width="620" height="260" rx="16" fill="#F0FDF4" stroke="#86EFAC" stroke-width="1.5"/>
-    <rect x="1005" y="745" width="130" height="28" rx="6" fill="#16A34A"/>
-    <text x="1018" y="764" font-family="Montserrat" font-size="13" fill="#FFFFFF" font-weight="800">BEST PRACTICE</text>
-    <text x="1005" y="810" font-family="Montserrat" font-size="22" fill="#166534" font-weight="800">{t2}</text>
-    <text x="1005" y="845" font-family="Rubik" font-size="16" fill="#14532D" font-weight="600">• Up to 5 GB Direct Storage Capacity</text>
-    <text x="1005" y="875" font-family="Rubik" font-size="16" fill="#14532D" font-weight="600">• Bypasses Vercel compute completely</text>
-    <text x="1005" y="905" font-family="Rubik" font-size="16" fill="#14532D" font-weight="600">• Ephemeral URL (Valid for 2–3 minutes)</text>
-    <text x="1005" y="945" font-family="Rubik" font-size="15" fill="#16A34A" font-weight="700">Outcome: Production-grade cloud reliability</text>
-  </g>
-</svg>"""
-    elif style == "vercel":
-        header_text = str(data.get("title", "BENCHMARKS • TESLA T4 NVENC HARDWARE")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        m1 = str(data.get("metric1", "97.8 FPS")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        m2 = str(data.get("metric2", "3.07s")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        m3 = str(data.get("metric3", "< 15 MB")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="24" stdDeviation="35" flood-color="#000000" flood-opacity="0.9"/>
-    </filter>
-  </defs>
-  <g {transform_attr} filter="url(#shadow)">
-    <rect x="320" y="670" width="1280" height="340" rx="16" fill="#000000" stroke="#333333" stroke-width="2"/>
-    <rect x="320" y="670" width="1280" height="50" rx="16" fill="#0A0A0A"/>
-    <line x1="320" y1="720" x2="1600" y2="720" stroke="#222222" stroke-width="1.5"/>
-    <circle cx="350" cy="695" r="6" fill="#FFFFFF"/>
-    <text x="370" y="702" font-family="Montserrat" font-size="15" fill="#EDEDED" font-weight="700" letter-spacing="2">{header_text}</text>
-    <rect x="360" y="750" width="370" height="225" rx="12" fill="#0A0A0A" stroke="#262626" stroke-width="1.5"/>
-    <rect x="385" y="775" width="130" height="28" rx="6" fill="#14532D" stroke="#22C55E" stroke-width="1"/>
-    <text x="396" y="794" font-family="JetBrains Mono" font-size="13" fill="#4ADE80" font-weight="800">▲ 10.6x FASTER</text>
-    <text x="385" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">{m1}</text>
-    <text x="385" y="905" font-family="Rubik" font-size="17" fill="#A1A1A1">Hardware GPU Encoding</text>
-    <text x="385" y="935" font-family="JetBrains Mono" font-size="14" fill="#525252">vs 9.2 FPS on CPU</text>
-    <rect x="770" y="750" width="370" height="225" rx="12" fill="#0A0A0A" stroke="#262626" stroke-width="1.5"/>
-    <rect x="795" y="775" width="140" height="28" rx="6" fill="#0C4A6E" stroke="#0284C7" stroke-width="1"/>
-    <text x="806" y="794" font-family="JetBrains Mono" font-size="13" fill="#38BDF8" font-weight="800">▼ 90% REDUCTION</text>
-    <text x="795" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">{m2}</text>
-    <text x="795" y="905" font-family="Rubik" font-size="17" fill="#A1A1A1">10-Second Take Render</text>
-    <text x="795" y="935" font-family="JetBrains Mono" font-size="14" fill="#525252">vs 32.5s on Chromium</text>
-    <rect x="1180" y="750" width="380" height="225" rx="12" fill="#0A0A0A" stroke="#262626" stroke-width="1.5"/>
-    <rect x="1205" y="775" width="130" height="28" rx="6" fill="#581C87" stroke="#A855F7" stroke-width="1"/>
-    <text x="1216" y="794" font-family="JetBrains Mono" font-size="13" fill="#C084FC" font-weight="800">ZERO CRASH</text>
-    <text x="1205" y="855" font-family="Montserrat" font-size="52" fill="#FFFFFF" font-weight="900">{m3}</text>
-    <text x="1205" y="905" font-family="Rubik" font-size="17" fill="#A1A1A1">VRAM Memory Footprint</text>
-    <text x="1205" y="935" font-family="JetBrains Mono" font-size="14" fill="#525252">vs 1.8 GB RAM on CPU</text>
-  </g>
-</svg>"""
-    else: # linear
-        header_text = str(data.get("title", "ARCHITECTURE • FULL-STACK UPLOAD FLOW")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        node_text = str(data.get("active_node", "Convex Cloud")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        action_text = str(data.get("action", "generateUploadUrl()")).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
-      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.75"/>
-    </filter>
-  </defs>
-  <g {transform_attr} filter="url(#shadow)">
-    <rect x="220" y="630" width="1480" height="390" rx="20" fill="#0F172A" stroke="#6366F1" stroke-width="2"/>
-    <rect x="220" y="630" width="1480" height="50" rx="20" fill="#0F172A" fill-opacity="0.8"/>
-    <line x1="220" y1="680" x2="1700" y2="680" stroke="#334155" stroke-width="1.5"/>
-    <circle cx="250" cy="655" r="7" fill="#EF4444"/><circle cx="272" cy="655" r="7" fill="#F59E0B"/><circle cx="294" cy="655" r="7" fill="#10B981"/>
-    <text x="325" y="662" font-family="Montserrat" font-size="16" fill="#94A3B8" font-weight="600">{header_text}</text>
-    <rect x="990" y="705" width="285" height="285" rx="16" fill="#0B132B" stroke="#38BDF8" stroke-width="2.5"/>
-    <rect x="1010" y="725" width="85" height="28" rx="6" fill="#0284C7"/>
-    <text x="1020" y="744" font-family="JetBrains Mono" font-size="13" fill="#FFFFFF" font-weight="700">● ACTIVE</text>
-    <text x="1010" y="790" font-family="Montserrat" font-size="24" fill="#FFFFFF" font-weight="800">{node_text}</text>
-    <text x="1010" y="822" font-family="Rubik" font-size="17" fill="#38BDF8" font-weight="600">{action_text}</text>
-    <line x1="1010" y1="855" x2="1245" y2="855" stroke="#1E3A8A" stroke-width="1.5"/>
-    <text x="1010" y="885" font-family="JetBrains Mono" font-size="13" fill="#93C5FD" font-weight="600">RETURNS TO CLIENT:</text>
-    <text x="1010" y="915" font-family="JetBrains Mono" font-size="16" fill="#FDE047" font-weight="700">Pre-Signed URL (3m)</text>
-    <text x="1010" y="945" font-family="Rubik" font-size="14" fill="#4ADE80" font-weight="600">✔ Bypasses 4.5MB Limit</text>
+    <rect x="{box_x}" y="{box_y}" width="{box_w}" height="{box_h}" rx="24" fill="{card_bg}" stroke="{card_border}" stroke-width="2"/>
+    {content_svg}
   </g>
 </svg>"""
 
-def render_cairo_png(style, data, out_png, w=1920, h=1080):
+def render_cairo_png_from_svg(svg_str, out_png, w=1920, h=1080):
     try:
         import cairosvg
-        svg = generate_cairo_svg(style, data, w, h)
-        cairosvg.svg2png(bytestring=svg.encode('utf-8'), write_to=out_png, output_width=w, output_height=h)
+        cairosvg.svg2png(bytestring=svg_str.encode('utf-8'), write_to=out_png, output_width=w, output_height=h)
         return True
     except Exception as e:
         print(f"Warning: Cairo rendering failed: {e}")
@@ -491,37 +523,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     with open(out_ass_path, "w", encoding="utf-8") as f:
         f.write(header + "\n".join(events) + "\n")
 
-def plan_multi_cairo_cues(total_sec, preferred_style="auto"):
-    """Distributes multiple graphics along the video timeline with breathing room."""
-    styles_cycle = ["linear", "tokyo-night", "stripe", "vercel"]
-    if preferred_style and preferred_style not in ["auto", "none"]:
-        styles_cycle = [preferred_style]
-
-    cues = []
-    if total_sec < 20:
-        cues.append({"start": round(total_sec * 0.15, 2), "end": round(total_sec * 0.85, 2), "style": styles_cycle[0], "id": "scene-0"})
-    elif total_sec < 50:
-        cues.append({"start": 3.0, "end": 15.0, "style": styles_cycle[0], "id": "scene-0"})
-        cues.append({"start": round(total_sec * 0.60, 2), "end": round(total_sec * 0.90, 2), "style": styles_cycle[1 % len(styles_cycle)], "id": "scene-1"})
-    elif total_sec < 85:
-        cues.append({"start": 3.0, "end": 16.0, "style": styles_cycle[0], "id": "scene-0"})
-        cues.append({"start": round(total_sec * 0.38, 2), "end": round(total_sec * 0.55, 2), "style": styles_cycle[1 % len(styles_cycle)], "id": "scene-1"})
-        cues.append({"start": round(total_sec * 0.70, 2), "end": round(total_sec * 0.88, 2), "style": styles_cycle[2 % len(styles_cycle)], "id": "scene-2"})
-    else:
-        cues.append({"start": 3.0, "end": 16.0, "style": styles_cycle[0], "id": "scene-0"})
-        cues.append({"start": 26.0, "end": 42.0, "style": styles_cycle[1 % len(styles_cycle)], "id": "scene-1"})
-        cues.append({"start": 54.0, "end": 72.0, "style": styles_cycle[2 % len(styles_cycle)], "id": "scene-2"})
-        cues.append({"start": 78.0, "end": 90.0, "style": styles_cycle[3 % len(styles_cycle)], "id": "scene-3"})
-
-    return cues
-
 def main():
-    parser = argparse.ArgumentParser(description="OSSClip GPU Exporter with Multi-Graphic Cairo Support")
+    parser = argparse.ArgumentParser(description="OSSClip GPU Exporter with Multi-Graphic Cairo & Web Editor Sync")
     parser.add_argument("workdir")
     parser.add_argument("--out", "-o", default=None)
     parser.add_argument("--format", choices=["auto", "vertical", "original", "blur-backdrop"], default="auto")
     parser.add_argument("--style", choices=list(STYLE_PRESETS.keys()) + ["default"], default="hormozi")
-    parser.add_argument("--graphics-style", choices=["tokyo-night", "linear", "stripe", "vercel", "auto", "none"], default="auto")
+    parser.add_argument("--graphics-style", default="auto")
     parser.add_argument("--bitrate", default="6M")
     parser.add_argument("--no-graphics", action="store_true", help="Do not render graphic overlays")
     parser.add_argument("--no-captions", action="store_true", help="Do not burn in subtitle captions")
@@ -590,9 +598,6 @@ def main():
     if user_cuts:
         spans = subtract_user_cuts(spans, user_cuts)
 
-    # Compute Output Duration
-    total_dur_sec = sum(s["srcOut"] - s["srcIn"] for s in spans if s.get("srcOut", 0) > s.get("srcIn", 0))
-
     source_video = None
     if os.path.exists(os.path.join(workdir, "production.json")):
         source_video = json.load(open(os.path.join(workdir, "production.json"))).get("source", {}).get("path")
@@ -602,64 +607,64 @@ def main():
             if os.path.exists(p) and os.path.getsize(p) > 1000:
                 source_video = p; break
 
-    # 3. Plan & Generate MULTIPLE Cairo Graphics Overlays in RAM (/dev/shm)
-    cairo_style = args.graphics_style
-    if cairo_style == "auto":
-        cairo_style = render_props.get("graphicsStyle", overrides.get("graphicsStyle", "auto"))
-
+    # 3. IDENTICAL GRAPHICS: Render the EXACT sceneCues displayed in the Web Editor
     graphic_overlays = []
-    if not args.no_graphics and cairo_style != "none":
+    if not args.no_graphics and args.graphics_style != "none":
+        scene_cues = render_props.get("sceneCues", [])
         scene_overrides = overrides.get("scenes", {})
-        reviewed_scenes_file = os.path.join(workdir, "reviewed-scenes.json")
-        custom_scenes = []
-        if os.path.exists(reviewed_scenes_file):
-            try: custom_scenes = json.load(open(reviewed_scenes_file, "r"))
-            except: pass
-
-        cues_to_render = []
-        if custom_scenes and len(custom_scenes) >= 2:
-            for idx, sc in enumerate(custom_scenes):
-                cues_to_render.append({
-                    "id": sc.get("id", f"scene-{idx}"),
-                    "start": sc.get("startSec", 0),
-                    "end": sc.get("endSec", 10),
-                    "style": sc.get("style", cairo_style if cairo_style != "auto" else "tokyo-night"),
-                    "props": sc.get("props", {})
-                })
-        else:
-            cues_to_render = plan_multi_cairo_cues(total_dur_sec, preferred_style=cairo_style)
-
         pid = os.getpid()
-        for idx, cue in enumerate(cues_to_render):
+
+        for idx, cue in enumerate(scene_cues):
+            comp = cue.get("component")
+            if not comp or comp == "None" or cue.get("kind") == "plain":
+                continue
+
             cue_id = cue.get("id", f"scene-{idx}")
             sc_override = scene_overrides.get(cue_id, {}) or scene_overrides.get(f"scene-{idx}", {})
 
+            # Skip if user hid this graphic in the editor
             if sc_override.get("hidden") is True:
                 continue
 
-            cue_props = {**cue.get("props", {}), **sc_override.get("props", {})}
+            # Merge all user text edits (props)
+            props = {**cue.get("props", {}), **sc_override.get("props", {})}
+
+            # Extract user positioning & scale edits (dx, dy, scale)
             elem_transforms = sc_override.get("elements", {})
             card_transform = elem_transforms.get("card", {}) or elem_transforms.get("root", {})
-            cue_props["dx"] = card_transform.get("dx", cue_props.get("dx", 0))
-            cue_props["dy"] = card_transform.get("dy", cue_props.get("dy", 0))
-            cue_props["scale"] = card_transform.get("scale", cue_props.get("scale", 1.0))
+            dx = card_transform.get("dx", 0)
+            dy = card_transform.get("dy", 0)
+            scale = card_transform.get("scale", 1.0)
 
-            start_t = cue["start"]
-            end_t = cue["end"]
+            # Timing: honors manual timeline nudges / pins
+            start_t = cue.get("startSec", 0)
+            end_t = cue.get("endSec", start_t + 5)
             if sc_override.get("timing"):
                 timing = sc_override["timing"]
                 start_t = timing.get("srcStart", timing.get("startSec", start_t))
                 end_t = timing.get("srcEnd", timing.get("endSec", end_t))
 
-            sty = cue.get("style", cairo_style if cairo_style != "auto" else "tokyo-night")
-            # Write to RAM-disk buffer
-            png_path = os.path.join(shm_dir, f"cairo_overlay_{idx}_{pid}.png")
-            if render_cairo_png(sty, cue_props, png_path, w=res_x, h=res_y):
+            layout = sc_override.get("layout", cue.get("layout", "lower-third"))
+
+            svg = generate_scene_component_svg(
+                component=comp,
+                props=props,
+                layout=layout,
+                theme=theme,
+                dx=dx,
+                dy=dy,
+                scale=scale,
+                w=res_x,
+                h=res_y
+            )
+
+            png_path = os.path.join(shm_dir, f"editor_overlay_{idx}_{pid}.png")
+            if render_cairo_png_from_svg(svg, png_path, w=res_x, h=res_y):
                 graphic_overlays.append({
                     "path": png_path,
                     "start": start_t,
                     "end": end_t,
-                    "style": sty
+                    "comp": comp
                 })
 
     ass_path = os.path.join(shm_dir, f"subtitles_custom_{os.getpid()}.ass")
@@ -707,11 +712,6 @@ def main():
     if select_filter != "1":
         cmd_filter += ["-af", f"aselect='{select_filter}',asetpts=N/SR/TB"]
 
-    # Maximum GPU & RAM Concurrency Flags:
-    # 1. Multi-threaded demuxing & filtering (-threads 4, -filter_threads 2)
-    # 2. 32 hardware frame surfaces allocated in Tesla T4 VRAM (-surfaces 32)
-    # 3. 16-frame lookahead buffer in GPU memory (-rc-lookahead 16)
-    # 4. Preset p4 for optimal NVENC encoding speed (42+ FPS)
     gpu_nvenc_flags = [
         "-threads", "4",
         "-filter_threads", "2",
@@ -727,11 +727,11 @@ def main():
 
     cmd = ["ffmpeg", "-y"] + inputs + cmd_filter + gpu_nvenc_flags
 
-    print(f"🎬 Starting GPU Export (Tesla T4 NVENC with 32 VRAM Surfaces & RAM Caching)...")
+    print(f"🎬 Starting GPU Export (Tesla T4 NVENC)...")
     if graphic_overlays:
-        print(f"✨ Compositing {len(graphic_overlays)} Cairo AI Graphics (Assets loaded from /dev/shm):")
+        print(f"✨ Rendering EXACT Web Editor Components ({len(graphic_overlays)} graphics):")
         for idx, g in enumerate(graphic_overlays):
-            print(f"   [{idx+1}] {g['style'].upper()} graphic at {g['start']}s -> {g['end']}s")
+            print(f"   [{idx+1}] {g['comp']} at {g['start']:.2f}s -> {g['end']:.2f}s")
     else:
         print(f"⚡ Clean Cut Video (No Graphics)")
 
