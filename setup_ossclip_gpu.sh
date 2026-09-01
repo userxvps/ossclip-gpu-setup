@@ -220,7 +220,8 @@ STYLE_PRESETS = {
         "fontMono": "JetBrains Mono",
         "outlinePx": 5,
         "shadowPx": 6,
-        "fontSize": 48
+        "fontSizeLandscape": 48,
+        "fontSizePortrait": 56
     },
     "mrbeast": {
         "accent": "#00FFA3",
@@ -228,7 +229,8 @@ STYLE_PRESETS = {
         "fontMono": "JetBrains Mono",
         "outlinePx": 6,
         "shadowPx": 8,
-        "fontSize": 52
+        "fontSizeLandscape": 52,
+        "fontSizePortrait": 60
     },
     "cyber": {
         "accent": "#00F0FF",
@@ -236,7 +238,8 @@ STYLE_PRESETS = {
         "fontMono": "JetBrains Mono",
         "outlinePx": 3,
         "shadowPx": 0,
-        "fontSize": 44
+        "fontSizeLandscape": 44,
+        "fontSizePortrait": 52
     },
     "pill": {
         "accent": "#FDE047",
@@ -244,7 +247,8 @@ STYLE_PRESETS = {
         "fontMono": "JetBrains Mono",
         "outlinePx": 0,
         "shadowPx": 4,
-        "fontSize": 40
+        "fontSizeLandscape": 40,
+        "fontSizePortrait": 50
     },
     "clean": {
         "accent": "#38BDF8",
@@ -252,7 +256,8 @@ STYLE_PRESETS = {
         "fontMono": "JetBrains Mono",
         "outlinePx": 2,
         "shadowPx": 2,
-        "fontSize": 42
+        "fontSizeLandscape": 42,
+        "fontSizePortrait": 52
     }
 }
 
@@ -297,34 +302,41 @@ def subtract_user_cuts(spans, user_cuts):
 
 def get_stage_geometry(layout, is_landscape=True, w=1920, h=1080):
     """
-    Implements Remotion stage.ts exact slot math.
+    Implements Remotion stage.ts exact slot math for both landscape and portrait.
     """
     if layout == "lower-third":
-        g = {"x": 0.05, "y": 0.70, "w": 0.62, "h": 0.18} if is_landscape else {"x": 0.04, "y": 0.56, "w": 0.80, "h": 0.22}
+        g = {"x": 0.05, "y": 0.70, "w": 0.62, "h": 0.18} if is_landscape else {"x": 0.04, "y": 0.56, "w": 0.92, "h": 0.22}
         caption_anchor = 0.62 if is_landscape else 0.49
         video_mode = "full"
-    elif layout == "split-left":
-        g = {"x": 0.55, "y": 0.20, "w": 0.40, "h": 0.56} if is_landscape else {"x": 0.04, "y": 0.58, "w": 0.80, "h": 0.20}
-        caption_anchor = 0.82 if is_landscape else 0.53
-        video_mode = "split-left"
-    elif layout == "split-right":
-        g = {"x": 0.05, "y": 0.20, "w": 0.40, "h": 0.56} if is_landscape else {"x": 0.04, "y": 0.58, "w": 0.80, "h": 0.20}
-        caption_anchor = 0.82 if is_landscape else 0.53
-        video_mode = "split-right"
+    elif layout in ["split-left", "split-right"]:
+        if is_landscape:
+            left = (layout == "split-left")
+            g = {"x": 0.55 if left else 0.05, "y": 0.20, "w": 0.40, "h": 0.56}
+            caption_anchor = 0.82
+            video_mode = "split-left" if left else "split-right"
+        else:
+            # In portrait, split-left/right places video on top 50%, card on bottom half
+            g = {"x": 0.04, "y": 0.58, "w": 0.92, "h": 0.20}
+            caption_anchor = 0.53
+            video_mode = "video-top"
     elif layout == "video-top":
-        g = {"x": 0.04, "y": 0.54, "w": 0.80, "h": 0.24}
-        caption_anchor = 0.48
+        g = {"x": 0.05, "y": 0.20, "w": 0.40, "h": 0.56} if is_landscape else {"x": 0.04, "y": 0.54, "w": 0.92, "h": 0.24}
+        caption_anchor = 0.82 if is_landscape else 0.48
         video_mode = "video-top"
     elif layout == "graphic-only":
-        g = {"x": 0.04, "y": 0.14, "w": 0.80, "h": 0.54}
-        caption_anchor = 0.80 if is_landscape else 0.73
+        g = {"x": 0.04, "y": 0.14, "w": 0.80, "h": 0.54} if is_landscape else {"x": 0.04, "y": 0.18, "w": 0.92, "h": 0.54}
+        caption_anchor = 0.80 if is_landscape else 0.75
         video_mode = "graphic-only"
+    elif layout == "pip-bubble":
+        g = {"x": 0.06, "y": 0.14, "w": 0.78, "h": 0.42} if is_landscape else {"x": 0.04, "y": 0.18, "w": 0.92, "h": 0.42}
+        caption_anchor = 0.78 if is_landscape else 0.65
+        video_mode = "full"
     elif layout == "blurred-behind":
-        g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36}
+        g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36} if is_landscape else {"x": 0.04, "y": 0.24, "w": 0.92, "h": 0.36}
         caption_anchor = 0.80 if is_landscape else 0.69
         video_mode = "blur"
     else: # full-bleed
-        g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36}
+        g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36} if is_landscape else {"x": 0.04, "y": 0.24, "w": 0.92, "h": 0.36}
         caption_anchor = 0.80 if is_landscape else 0.70
         video_mode = "full"
 
@@ -343,8 +355,9 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
     fg = theme.get("fg", "#FFFFFF")
     font_display = theme.get("fontDisplay", "Montserrat")
     font_mono = theme.get("fontMono", "JetBrains Mono")
+    is_landscape = (w > h)
 
-    geom = get_stage_geometry(layout, is_landscape=(w > h), w=w, h=h)
+    geom = get_stage_geometry(layout, is_landscape=is_landscape, w=w, h=h)
     box_x, box_y, box_w, box_h = geom["x"], geom["y"], geom["w"], geom["h"]
 
     transform_attr = f'transform="translate({dx}, {dy}) scale({scale})"' if (dx != 0 or dy != 0 or scale != 1.0) else ''
@@ -356,7 +369,7 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
         sub = esc(props.get("sub", ""))
         emphasis = esc(props.get("emphasis", ""))
 
-        if layout == "lower-third":
+        if layout == "lower-third" and is_landscape:
             items = []
             curr_y = box_y + 42
             if eyebrow:
@@ -370,42 +383,64 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
             content_svg = "\n".join(items)
         else:
             items = []
-            curr_y = box_y + 90
+            title_fsize = 48 if is_landscape else 40
+            curr_y = box_y + (85 if is_landscape else 75)
             if eyebrow:
-                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="22" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">{eyebrow.upper()}</text>')
-                curr_y += 75
+                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">{eyebrow.upper()}</text>')
+                curr_y += (70 if is_landscape else 60)
             if emphasis:
-                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="90" font-weight="900" fill="{accent}" text-anchor="middle">{emphasis}</text>')
-                curr_y += 85
-            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="48" font-weight="900" fill="{fg}" text-anchor="middle">{title.upper()}</text>')
+                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="80" font-weight="900" fill="{accent}" text-anchor="middle">{emphasis}</text>')
+                curr_y += (80 if is_landscape else 70)
+            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="{title_fsize}" font-weight="900" fill="{fg}" text-anchor="middle">{title.upper()}</text>')
             if sub and sub.lower() != title.lower():
-                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y + 55}" font-family="{font_display}" font-size="22" font-weight="600" fill="#CBD5E1" text-anchor="middle">{sub}</text>')
+                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y + 50}" font-family="{font_display}" font-size="22" font-weight="600" fill="#CBD5E1" text-anchor="middle">{sub}</text>')
             content_svg = "\n".join(items)
 
     elif component == "FlowDiagram":
         nodes = props.get("nodes", [])
         emphasize_last = props.get("emphasizeLast", True)
         n_count = len(nodes)
-        chip_w = min(360, (box_w - (n_count * 80)) // max(1, n_count))
-        total_w = n_count * chip_w + (n_count - 1) * 70
-        start_x = box_x + (box_w - total_w) // 2
-        chip_y = box_y + box_h // 2 - 45
 
         items = [
-            f'<text x="{box_x + 60}" y="{box_y + 65}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" letter-spacing="2">ARCHITECTURE PIPELINE</text>'
+            f'<text x="{box_x + box_w//2}" y="{box_y + 65}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" letter-spacing="2" text-anchor="middle">ARCHITECTURE PIPELINE</text>'
         ]
-        for i, node in enumerate(nodes):
-            cx = start_x + i * (chip_w + 70)
-            is_emph = (i == n_count - 1 and emphasize_last)
-            bg = accent if is_emph else "#1E293B"
-            text_color = "#0F172A" if is_emph else "#FFFFFF"
-            border_color = accent if is_emph else "#475569"
 
-            items.append(f'<rect x="{cx}" y="{chip_y}" width="{chip_w}" height="90" rx="16" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
-            items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + 55}" font-family="{font_display}" font-size="20" font-weight="800" fill="{text_color}" text-anchor="middle">{esc(node).upper()}</text>')
+        if is_landscape and n_count <= 4:
+            # Horizontal pipeline
+            chip_w = min(360, (box_w - (n_count * 80)) // max(1, n_count))
+            total_w = n_count * chip_w + (n_count - 1) * 70
+            start_x = box_x + (box_w - total_w) // 2
+            chip_y = box_y + box_h // 2 - 45
+            for i, node in enumerate(nodes):
+                cx = start_x + i * (chip_w + 70)
+                is_emph = (i == n_count - 1 and emphasize_last)
+                bg = accent if is_emph else "#1E293B"
+                text_color = "#0F172A" if is_emph else "#FFFFFF"
+                border_color = accent if is_emph else "#475569"
+                items.append(f'<rect x="{cx}" y="{chip_y}" width="{chip_w}" height="90" rx="16" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
+                items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + 55}" font-family="{font_display}" font-size="20" font-weight="800" fill="{text_color}" text-anchor="middle">{esc(node).upper()}</text>')
+                if i < n_count - 1:
+                    items.append(f'<text x="{cx + chip_w + 35}" y="{chip_y + 55}" font-family="{font_display}" font-size="34" font-weight="900" fill="#64748B" text-anchor="middle">→</text>')
+        else:
+            # Vertical pipeline stack (Portrait 9:16)
+            chip_h = min(75, (box_h - 140 - (n_count * 45)) // max(1, n_count))
+            chip_w = min(700, box_w - 100)
+            chip_x = box_x + (box_w - chip_w) // 2
+            gap = 48
+            total_h = n_count * chip_h + (n_count - 1) * gap
+            start_y = box_y + 110 + max(0, (box_h - 110 - total_h) // 2)
 
-            if i < n_count - 1:
-                items.append(f'<text x="{cx + chip_w + 35}" y="{chip_y + 55}" font-family="{font_display}" font-size="34" font-weight="900" fill="#64748B" text-anchor="middle">→</text>')
+            for i, node in enumerate(nodes):
+                cy = start_y + i * (chip_h + gap)
+                is_emph = (i == n_count - 1 and emphasize_last)
+                bg = accent if is_emph else "#1E293B"
+                text_color = "#0F172A" if is_emph else "#FFFFFF"
+                border_color = accent if is_emph else "#475569"
+                items.append(f'<rect x="{chip_x}" y="{cy}" width="{chip_w}" height="{chip_h}" rx="16" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
+                items.append(f'<text x="{chip_x + chip_w//2}" y="{cy + chip_h//2 + 9}" font-family="{font_display}" font-size="24" font-weight="800" fill="{text_color}" text-anchor="middle">{esc(node).upper()}</text>')
+                if i < n_count - 1:
+                    items.append(f'<text x="{chip_x + chip_w//2}" y="{cy + chip_h + 34}" font-family="{font_display}" font-size="30" font-weight="900" fill="#64748B" text-anchor="middle">↓</text>')
+
         content_svg = "\n".join(items)
 
     elif component == "StatCard":
@@ -413,7 +448,7 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
         value = esc(props.get("value", "0"))
         caption = esc(props.get("caption", ""))
 
-        if layout == "lower-third":
+        if layout == "lower-third" and is_landscape:
             items = [
                 f'<text x="{box_x + 50}" y="{box_y + 75}" font-family="{font_display}" font-size="28" font-weight="800" fill="#94A3B8" letter-spacing="2">{label.upper()}</text>',
                 f'<text x="{box_x + box_w - 60}" y="{box_y + 115}" font-family="{font_display}" font-size="74" font-weight="900" fill="{accent}" text-anchor="end">{value}</text>'
@@ -423,19 +458,32 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
             content_svg = "\n".join(items)
         else:
             items = [
-                f'<text x="{box_x + 60}" y="{box_y + 100}" font-family="{font_display}" font-size="36" font-weight="800" fill="#94A3B8" letter-spacing="2">{label.upper()}</text>',
-                f'<text x="{box_x + box_w - 60}" y="{box_y + 170}" font-family="{font_display}" font-size="100" font-weight="900" fill="{accent}" text-anchor="end">{value}</text>'
+                f'<text x="{box_x + 60}" y="{box_y + 90}" font-family="{font_display}" font-size="30" font-weight="800" fill="#94A3B8" letter-spacing="2">{label.upper()}</text>',
+                f'<text x="{box_x + box_w - 60}" y="{box_y + 160}" font-family="{font_display}" font-size="80" font-weight="900" fill="{accent}" text-anchor="end">{value}</text>'
             ]
             if caption:
-                items.append(f'<text x="{box_x + 60}" y="{box_y + 230}" font-family="{font_display}" font-size="26" font-weight="600" fill="#CBD5E1">{caption}</text>')
+                items.append(f'<text x="{box_x + 60}" y="{box_y + 220}" font-family="{font_display}" font-size="24" font-weight="600" fill="#CBD5E1">{caption}</text>')
             content_svg = "\n".join(items)
+
+    elif component == "RuleCard":
+        kicker = esc(props.get("kicker", "BEST PRACTICE"))
+        text = esc(props.get("text", ""))
+        struck = esc(props.get("struck", ""))
+
+        items = [
+            f'<text x="{box_x + 60}" y="{box_y + 80}" font-family="{font_mono}" font-size="22" font-weight="700" fill="#94A3B8" letter-spacing="4">{kicker.upper()}</text>',
+            f'<text x="{box_x + 60}" y="{box_y + 160}" font-family="{font_display}" font-size="40" font-weight="900" fill="{fg}">{text.upper()}</text>'
+        ]
+        if struck:
+            items.append(f'<text x="{box_x + 60}" y="{box_y + 230}" font-family="{font_display}" font-size="30" font-weight="700" fill="#EF4444">{struck.upper()}</text>')
+        content_svg = "\n".join(items)
 
     elif component == "StrikethroughReveal":
         lines = props.get("lines", [])
         items = [
             f'<text x="{box_x + 60}" y="{box_y + 65}" font-family="{font_display}" font-size="20" font-weight="700" fill="#94A3B8" letter-spacing="2">DECISION &amp; BEST PRACTICE</text>'
         ]
-        curr_y = box_y + 140
+        curr_y = box_y + 135
         for i, l in enumerate(lines):
             text = esc(l.get("text", ""))
             struck = l.get("struck", False)
@@ -443,24 +491,24 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
 
             mark_svg = ""
             if mark == "cross":
-                mark_svg = f"""<g transform="translate({box_x + 80}, {curr_y - 12})">
-                  <circle cx="0" cy="0" r="18" fill="#EF4444" fill-opacity="0.25"/>
-                  <path d="M-7,-7 L7,7 M7,-7 L-7,7" stroke="#EF4444" stroke-width="4" stroke-linecap="round"/>
+                mark_svg = f"""<g transform="translate({box_x + 75}, {curr_y - 10})">
+                  <circle cx="0" cy="0" r="16" fill="#EF4444" fill-opacity="0.25"/>
+                  <path d="M-6,-6 L6,6 M6,-6 L-6,6" stroke="#EF4444" stroke-width="3.5" stroke-linecap="round"/>
                 </g>"""
             elif mark == "check":
-                mark_svg = f"""<g transform="translate({box_x + 80}, {curr_y - 12})">
-                  <circle cx="0" cy="0" r="18" fill="#10B981" fill-opacity="0.25"/>
-                  <path d="M-8,0 L-2,6 L8,-6" stroke="#10B981" stroke-width="4" stroke-linecap="round" fill="none"/>
+                mark_svg = f"""<g transform="translate({box_x + 75}, {curr_y - 10})">
+                  <circle cx="0" cy="0" r="16" fill="#10B981" fill-opacity="0.25"/>
+                  <path d="M-7,0 L-2,5 L7,-5" stroke="#10B981" stroke-width="3.5" stroke-linecap="round" fill="none"/>
                 </g>"""
 
             text_color = "#64748B" if struck else "#FFFFFF"
             items.append(mark_svg)
-            items.append(f'<text x="{box_x + 120}" y="{curr_y}" font-family="{font_display}" font-size="34" font-weight="800" fill="{text_color}">{text.upper()}</text>')
+            items.append(f'<text x="{box_x + 110}" y="{curr_y}" font-family="{font_display}" font-size="30" font-weight="800" fill="{text_color}">{text.upper()}</text>')
 
             if struck:
-                approx_w = len(text) * 22
-                items.append(f'<line x1="{box_x + 115}" y1="{curr_y - 12}" x2="{box_x + 125 + approx_w}" y2="{curr_y - 12}" stroke="#EF4444" stroke-width="4.5" stroke-linecap="round"/>')
-            curr_y += 80
+                approx_w = min(box_w - 150, len(text) * 18)
+                items.append(f'<line x1="{box_x + 105}" y1="{curr_y - 10}" x2="{box_x + 115 + approx_w}" y2="{curr_y - 10}" stroke="#EF4444" stroke-width="4" stroke-linecap="round"/>')
+            curr_y += 75
         content_svg = "\n".join(items)
 
     elif component in ["ScreenshotFrame", "BrowserFrame"]:
@@ -474,23 +522,37 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
             f'<text x="{box_x + box_w//2}" y="{box_y + 30}" font-family="{font_mono}" font-size="14" fill="#94A3B8" text-anchor="middle">convex-dashboard.local</text>',
             f'<g transform="translate({box_x + 48}, {box_y + 80})">'
         ]
-        skeleton_widths = [0.90, 0.75, 0.85, 0.60, 0.80, 0.50, 0.70]
+        skeleton_widths = [0.90, 0.75, 0.85, 0.60, 0.80]
         s_y = 20
         for i, w_frac in enumerate(skeleton_widths):
             line_w = int((box_w - 96) * w_frac)
             color = "#334155" if i % 3 == 0 else "#1E293B"
-            items.append(f'<rect x="0" y="{s_y}" width="{line_w}" height="24" rx="6" fill="{color}"/>')
-            s_y += 44
+            items.append(f'<rect x="0" y="{s_y}" width="{line_w}" height="22" rx="6" fill="{color}"/>')
+            s_y += 40
         items.append('</g>')
-        items.append(f"""<g transform="translate({box_x + box_w - 220}, {box_y + box_h - 40})">
-          <rect x="0" y="0" width="200" height="52" rx="12" fill="#FFFFFF"/>
-          <text x="100" y="33" font-family="{font_display}" font-size="20" font-weight="900" fill="#0F172A" text-anchor="middle" letter-spacing="3">{label.upper()}</text>
+        items.append(f"""<g transform="translate({box_x + box_w - 200}, {box_y + box_h - 38})">
+          <rect x="0" y="0" width="180" height="46" rx="10" fill="#FFFFFF"/>
+          <text x="90" y="30" font-family="{font_display}" font-size="18" font-weight="900" fill="#0F172A" text-anchor="middle" letter-spacing="3">{label.upper()}</text>
         </g>""")
+        content_svg = "\n".join(items)
+
+    elif component == "BulletList":
+        title = esc(props.get("title", ""))
+        items_data = props.get("items", [])
+        items = []
+        curr_y = box_y + 70
+        if title:
+            items.append(f'<text x="{box_x + 60}" y="{curr_y}" font-family="{font_display}" font-size="22" font-weight="700" fill="#94A3B8" letter-spacing="2">{title.upper()}</text>')
+            curr_y += 50
+        for itm in items_data:
+            items.append(f'<text x="{box_x + 60}" y="{curr_y}" font-family="{font_display}" font-size="28" font-weight="900" fill="{accent}">▸</text>')
+            items.append(f'<text x="{box_x + 95}" y="{curr_y}" font-family="{font_display}" font-size="28" font-weight="800" fill="{fg}">{esc(itm).upper()}</text>')
+            curr_y += 55
         content_svg = "\n".join(items)
 
     else:
         title = esc(props.get("title", component))
-        content_svg = f'<text x="{box_x + box_w//2}" y="{box_y + box_h//2}" font-family="{font_display}" font-size="44" font-weight="900" fill="{fg}" text-anchor="middle">{title}</text>'
+        content_svg = f'<text x="{box_x + box_w//2}" y="{box_y + box_h//2}" font-family="{font_display}" font-size="40" font-weight="900" fill="{fg}" text-anchor="middle">{title}</text>'
 
     return f"""<svg width="{w}" height="{h}" viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg">
   <defs>
@@ -520,11 +582,11 @@ def build_ass_subtitles(caption_lines, cues, theme, out_ass_path, res_x=1920, re
     accent_hex = theme.get("accent", style_info.get("accent", "#FFE600"))
     accent_ass = hex_to_ass_color(accent_hex)
     normal_ass = "&H00FFFFFF&"
-    font_size = style_info.get("fontSize", 46)
-    outline_px = style_info.get("outlinePx", 4)
-    shadow_px = style_info.get("shadowPx", 4)
 
     is_landscape = (res_x > res_y)
+    font_size = style_info.get("fontSizeLandscape" if is_landscape else "fontSizePortrait", 46 if is_landscape else 54)
+    outline_px = style_info.get("outlinePx", 4)
+    shadow_px = style_info.get("shadowPx", 4)
     default_anchor = 0.80 if is_landscape else 0.70
 
     header = f"""[Script Info]
@@ -573,7 +635,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write(header + "\n".join(events) + "\n")
 
 def main():
-    parser = argparse.ArgumentParser(description="OSSClip High-Speed GPU Exporter with Full Remotion Layout Parity")
+    parser = argparse.ArgumentParser(description="OSSClip High-Speed GPU Exporter with Full Remotion Layout Parity (Landscape & Portrait)")
     parser.add_argument("workdir")
     parser.add_argument("--out", "-o", default=None)
     parser.add_argument("--format", choices=["auto", "vertical", "original", "blur-backdrop"], default="auto")
@@ -612,10 +674,10 @@ def main():
     else:
         target_format = args.format
 
-    is_vertical = target_format in ["vertical", "blur-backdrop"]
+    is_vertical = target_format in ["vertical", "blur-backdrop"] or (prop_h > prop_w)
     res_x = 1080 if is_vertical else prop_w
     res_y = 1920 if is_vertical else prop_h
-    is_landscape = (res_x > res_y)
+    is_landscape = not is_vertical
 
     style_info = STYLE_PRESETS.get(args.style, {})
     theme = {**render_props.get("theme", {}), **style_info, **overrides.get("theme", {})}
@@ -660,6 +722,8 @@ def main():
     blur_intervals = []
     split_left_intervals = []
     split_right_intervals = []
+    video_top_intervals = []
+    graphic_only_intervals = []
 
     if not args.no_graphics and args.graphics_style != "none":
         scene_cues = render_props.get("sceneCues", [])
@@ -701,6 +765,10 @@ def main():
                 split_left_intervals.append(cond)
             elif geom["video_mode"] == "split-right":
                 split_right_intervals.append(cond)
+            elif geom["video_mode"] == "video-top":
+                video_top_intervals.append(cond)
+            elif geom["video_mode"] == "graphic-only":
+                graphic_only_intervals.append(cond)
 
             svg = generate_scene_svg(
                 component=comp,
@@ -750,7 +818,7 @@ def main():
     base_vf = []
     if select_filter != "1":
         base_vf.append(f"select='{select_filter}',setpts=N/FRAME_RATE/TB")
-    if target_format == "vertical":
+    if is_vertical:
         base_vf.append(f"crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920")
     else:
         base_vf.append(f"scale={res_x}:{res_y}")
@@ -764,7 +832,25 @@ def main():
     filter_chains.append(f"[0:v]{','.join(base_vf)}[v_scaled]")
     curr_stage = "v_scaled"
 
-    # 3. Dynamic Split-Left FX (Video left half, dark backdrop right half)
+    # 3. Dynamic Video-Top / Portrait Split FX (Video top 42%, dark backdrop bottom)
+    if video_top_intervals and is_vertical:
+        vt_cond = "+".join(video_top_intervals)
+        top_h = 806
+        filter_chains.append(f"[{curr_stage}]split=2[v_norm_vt][v_crop_vt]")
+        filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_vt]")
+        filter_chains.append(f"[v_crop_vt]crop={res_x}:{top_h}:0:0[v_top_half]")
+        filter_chains.append(f"[bg_vt][v_top_half]overlay=x=0:y=0[stage_vt]")
+        filter_chains.append(f"[v_norm_vt][stage_vt]overlay=enable='{vt_cond}'[v_stage_vt]")
+        curr_stage = "v_stage_vt"
+
+    # 4. Dynamic Graphic-Only FX (Video hidden, solid dark stage canvas)
+    if graphic_only_intervals:
+        go_cond = "+".join(graphic_only_intervals)
+        filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_go]")
+        filter_chains.append(f"[{curr_stage}][bg_go]overlay=enable='{go_cond}'[v_stage_go]")
+        curr_stage = "v_stage_go"
+
+    # 5. Dynamic Split-Left FX (Landscape: Video left 50%, dark backdrop right 50%)
     if split_left_intervals and is_landscape:
         sl_cond = "+".join(split_left_intervals)
         half_w = res_x // 2
@@ -775,7 +861,7 @@ def main():
         filter_chains.append(f"[v_norm_sl][split_canvas_l]overlay=enable='{sl_cond}'[v_stage_sl]")
         curr_stage = "v_stage_sl"
 
-    # 4. Dynamic Split-Right FX (Video right half, dark backdrop left half)
+    # 6. Dynamic Split-Right FX (Landscape: Video right 50%, dark backdrop left 50%)
     if split_right_intervals and is_landscape:
         sr_cond = "+".join(split_right_intervals)
         half_w = res_x // 2
@@ -786,14 +872,14 @@ def main():
         filter_chains.append(f"[v_norm_sr][split_canvas_r]overlay=enable='{sr_cond}'[v_stage_sr]")
         curr_stage = "v_stage_sr"
 
-    # 5. Overlays (Graphic Cards from Cairo)
+    # 7. Overlays (Graphic Cards from Cairo)
     last_v = curr_stage
     for i, g in enumerate(graphic_overlays):
         next_v = f"v_ov_{i}"
         filter_chains.append(f"[{last_v}][{i+1}:v]overlay=enable='between(t,{g['start']},{g['end']})':format=auto[{next_v}]")
         last_v = next_v
 
-    # 6. Burn-in Subtitles with Dynamic Anchors
+    # 8. Burn-in Subtitles with Dynamic Anchors
     ass_filter = f",ass={ass_path}" if not args.no_captions else ""
     filter_chains.append(f"[{last_v}]null{ass_filter}[outv]")
 
@@ -820,13 +906,17 @@ def main():
 
     print(f"🎬 Starting High-Speed Cairo GPU Export (Tesla T4 NVENC with Complete Remotion Layout Parity)...")
     if graphic_overlays:
-        print(f"✨ Active Stages:")
+        print(f"✨ Active Stages ({'Portrait 9:16' if is_vertical else 'Landscape 16:9'}):")
+        if video_top_intervals and is_vertical:
+            print(f"   • Video-Top Stage Active ({len(video_top_intervals)} cues): Video on Top 42%, Dark Stage at Bottom")
+        if graphic_only_intervals:
+            print(f"   • Graphic-Only Stage Active ({len(graphic_only_intervals)} cues): Video hidden, Full Dark Stage")
         if split_left_intervals:
-            print(f"   • Split-Left Stage Active ({len(split_left_intervals)} cues): Video cropped to Left 50%, Card on Right 50%")
+            print(f"   • Split-Left Stage Active ({len(split_left_intervals)} cues)")
         if blur_intervals:
             print(f"   • Blurred-Behind Stage Active ({len(blur_intervals)} cues): Dynamic Video Blur + Centered Card")
         for idx, g in enumerate(graphic_overlays):
-            print(f"   [{idx+1}] {g['comp']} at {g['start']:.2f}s -> {g['end']:.2f}s")
+            print(f"   [{idx+1}] {g['comp']} at {g['start']:.2f}s -> {g['end']:.2f}s (anchor: {g['caption_anchor']})")
     else:
         print(f"⚡ Clean Cut Video (No Graphics)")
 
