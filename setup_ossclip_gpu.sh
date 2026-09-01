@@ -256,6 +256,7 @@ STYLE_PRESETS = {
 }
 
 def hex_to_ass_color(hex_str):
+    if not hex_str: return "&H00FFFFFF&"
     hex_str = hex_str.lstrip('#')
     if len(hex_str) == 6:
         r, g, b = hex_str[0:2], hex_str[2:4], hex_str[4:6]
@@ -273,8 +274,25 @@ def format_ass_time(seconds):
     if cs >= 100: cs = 99
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
+def subtract_user_cuts(spans, user_cuts):
+    """Applies cuts made by user in the Web Interface (overrides.cuts)."""
+    current_spans = [(s["srcIn"], s["srcOut"]) for s in spans]
+    for cut in user_cuts:
+        src = cut.get("src")
+        if not src: continue
+        c_in, c_out = src.get("startSec", 0), src.get("endSec", 0)
+        new_spans = []
+        for s_in, s_out in current_spans:
+            if c_out <= s_in or c_in >= s_out:
+                new_spans.append((s_in, s_out))
+            else:
+                if c_in > s_in: new_spans.append((s_in, c_in))
+                if c_out < s_out: new_spans.append((c_out, s_out))
+        current_spans = new_spans
+    return [{"srcIn": s[0], "srcOut": s[1]} for s in current_spans]
+
 def generate_cairo_svg(style, data, w=1920, h=1080):
-    """Generates razor-sharp HD vector SVG in the requested style."""
+    """Generates razor-sharp HD vector SVG in the requested style with user data."""
     if style == "tokyo-night":
         title = data.get("title", "convex/files.ts")
         lines = data.get("lines", [
@@ -290,7 +308,7 @@ def generate_cairo_svg(style, data, w=1920, h=1080):
         code_spans = []
         for i, l in enumerate(lines):
             line_no = f"{i+1:02d}"
-            escaped = l.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            escaped = str(l).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             code_spans.append(f'<text x="1010" y="{720 + i*36}" font-family="JetBrains Mono" font-size="18" fill="#444B6A">{line_no}</text><text x="1055" y="{720 + i*36}" font-family="JetBrains Mono" font-size="18" fill="#C0CAF5">{escaped}</text>')
         code_xml = "\n".join(code_spans)
 
@@ -307,7 +325,7 @@ def generate_cairo_svg(style, data, w=1920, h=1080):
     <circle cx="1008" cy="654" r="7" fill="#FF5F56"/>
     <circle cx="1030" cy="654" r="7" fill="#FFBD2E"/>
     <circle cx="1052" cy="654" r="7" fill="#27C93F"/>
-    <rect x="1078" y="638" width="180" height="32" rx="6" fill="#16161E"/>
+    <rect x="1078" y="638" width="220" height="32" rx="6" fill="#16161E"/>
     <text x="1095" y="660" font-family="JetBrains Mono" font-size="14" fill="#A9B1D6" font-weight="600">{title}</text>
     {code_xml}
   </g>
@@ -415,8 +433,10 @@ def render_cairo_png(style, data, out_png, w=1920, h=1080):
 
 def build_ass_subtitles(caption_lines, theme, out_ass_path, res_x=1920, res_y=1080, style_info=None):
     if not style_info: style_info = {}
-    font_display = style_info.get("fontDisplay", theme.get("fontDisplay", "Montserrat"))
-    accent_hex = style_info.get("accent", theme.get("accent", "#FFE600"))
+    font_display = theme.get("fontDisplay", style_info.get("fontDisplay", "Montserrat"))
+    # Strip quotes if any
+    font_display = font_display.replace("'", "").replace('"', '').split(',')[0].strip()
+    accent_hex = theme.get("accent", style_info.get("accent", "#FFE600"))
     accent_ass = hex_to_ass_color(accent_hex)
     normal_ass = "&H00FFFFFF&"
     font_size = style_info.get("fontSize", 46)
@@ -500,10 +520,36 @@ def main():
     res_x = 1080 if is_vertical else prop_w
     res_y = 1920 if is_vertical else prop_h
 
+    # Merge Theme: Base -> Style Preset -> Overrides from Web Editor
     style_info = STYLE_PRESETS.get(args.style, {})
     theme = {**render_props.get("theme", {}), **style_info, **overrides.get("theme", {})}
+
+    # Check Caption Visibility Override
+    if overrides.get("captionsHidden") is True:
+        args.no_captions = True
+
+    # 1. Apply Web Editor Retypes & Word Hides to Caption Lines
     caption_lines = render_props.get("captionLines", [])
+    caption_edits = overrides.get("captions", {})
+    hidden_words = overrides.get("captionWordsHidden", {})
+
+    for line in caption_lines:
+        kept_words = []
+        for w in line.get("words", []):
+            src_val = w.get("srcStart", w.get("start"))
+            key = f"{src_val:.3f}" if src_val is not None else None
+            if key and key in hidden_words:
+                continue
+            if key and key in caption_edits:
+                w["text"] = caption_edits[key].get("text", w["text"])
+            kept_words.append(w)
+        line["words"] = kept_words
+
+    # 2. Apply Web Editor Cuts to Spans
     spans = render_props.get("spans", [])
+    user_cuts = overrides.get("cuts", [])
+    if user_cuts:
+        spans = subtract_user_cuts(spans, user_cuts)
 
     source_video = None
     if os.path.exists(os.path.join(workdir, "production.json")):
@@ -514,15 +560,25 @@ def main():
             if os.path.exists(p) and os.path.getsize(p) > 1000:
                 source_video = p; break
 
-    # Check Cairo Graphics Style
+    # Check Cairo Graphics Style & Scenes
     cairo_style = args.graphics_style
     if cairo_style == "auto":
-        cairo_style = render_props.get("graphicsStyle", "tokyo-night")
+        cairo_style = render_props.get("graphicsStyle", overrides.get("graphicsStyle", "tokyo-night"))
 
     overlay_png = None
     if not args.no_graphics and cairo_style != "none":
+        # Check if reviewed-scenes.json exists with custom edits
+        scene_data = {}
+        reviewed_scenes_file = os.path.join(workdir, "reviewed-scenes.json")
+        if os.path.exists(reviewed_scenes_file):
+            try:
+                scs = json.load(open(reviewed_scenes_file, "r"))
+                if scs and isinstance(scs, list):
+                    scene_data = scs[0].get("props", {})
+            except: pass
+
         overlay_png = os.path.join(workdir, "cairo_overlay.png")
-        render_cairo_png(cairo_style, {}, overlay_png, w=res_x, h=res_y)
+        render_cairo_png(cairo_style, scene_data, overlay_png, w=res_x, h=res_y)
 
     ass_path = os.path.join(workdir, "subtitles_custom.ass")
     if not args.no_captions:
@@ -544,7 +600,6 @@ def main():
     if overlay_png and os.path.exists(overlay_png):
         inputs += ["-i", overlay_png]
 
-    # Filter Assembly
     base_vf = []
     if select_filter != "1":
         base_vf.append(f"select='{select_filter}',setpts=N/FRAME_RATE/TB")
@@ -556,7 +611,6 @@ def main():
         base_vf.append(f"scale={res_x}:{res_y}")
 
     if overlay_png and os.path.exists(overlay_png):
-        # Overlay between second 2 and second 10 (or duration)
         filter_str = f"[0:v]{','.join(base_vf)}[v0]; [v0][1:v]overlay=enable='between(t,2,10)':format=auto{ass_filter}[outv]"
         cmd_filter = ["-filter_complex", filter_str, "-map", "[outv]", "-map", "0:a"]
     else:
@@ -583,8 +637,7 @@ def main():
     else:
         print(f"⚡ Clean Cut Video (No Graphics)")
 
-    t0 = subprocess.check_output
-    proc = subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True)
     print(f"✅ Finished! Video written to: {out_file}")
 
 if __name__ == "__main__":
