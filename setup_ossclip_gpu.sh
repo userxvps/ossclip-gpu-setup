@@ -769,19 +769,7 @@ replace_in_file(
     '"-c:v", "h264_nvenc", "-preset", "p4", "-cq", "18",'
 )
 
-# Patch edit.ts to wire UI Render button to GPU
-replace_in_file(
-    "/tools/node/lib/node_modules/ossclip/src/edit.ts",
-    'const child = spawn(cmd.execPath, [...cmd.execArgv, cmd.script, ...args], {',
-    '''let spawnBinary = cmd.execPath;
-          let spawnArgs = [...cmd.execArgv, cmd.script, ...args];
-          if (existsSync("/usr/local/bin/ossclip-gpu-render")) {
-            const outPath = customOut ?? cmd.out ?? "/content/rendered_output.mp4";
-            spawnBinary = "/usr/local/bin/ossclip-gpu-render";
-            spawnArgs = [workdir!, "--format", "auto", "--out", outPath];
-          }
-          const child = spawn(spawnBinary, spawnArgs, {'''
-)
+# Web Editor uses official default Remotion engine with full layout & graphic fidelity
 
 # Patch phonetics.ts to allow labial onsets (e.g. "parcel" -> "Vercel")
 replace_in_file(
