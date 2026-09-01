@@ -1323,12 +1323,14 @@ def main():
         "-threads", "4",
         "-filter_threads", "2",
         "-c:v", "h264_nvenc",
+        "-pix_fmt", "yuv420p",
         "-preset", "p4",
         "-surfaces", "32",
         "-rc-lookahead", "16",
         "-tune", "hq",
         "-b:v", args.bitrate,
         "-c:a", "aac", "-b:a", "192k",
+        "-movflags", "+faststart",
         out_file
     ]
 
