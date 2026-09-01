@@ -297,28 +297,36 @@ def subtract_user_cuts(spans, user_cuts):
 
 def get_stage_geometry(layout, is_landscape=True, w=1920, h=1080):
     """
-    Implements the exact layout geometry from Remotion's stage.ts
+    Implements Remotion stage.ts exact slot math.
     """
     if layout == "lower-third":
         g = {"x": 0.05, "y": 0.70, "w": 0.62, "h": 0.18} if is_landscape else {"x": 0.04, "y": 0.56, "w": 0.80, "h": 0.22}
         caption_anchor = 0.62 if is_landscape else 0.49
-        video_blur = False
+        video_mode = "full"
     elif layout == "split-left":
         g = {"x": 0.55, "y": 0.20, "w": 0.40, "h": 0.56} if is_landscape else {"x": 0.04, "y": 0.58, "w": 0.80, "h": 0.20}
         caption_anchor = 0.82 if is_landscape else 0.53
-        video_blur = False
+        video_mode = "split-left"
     elif layout == "split-right":
         g = {"x": 0.05, "y": 0.20, "w": 0.40, "h": 0.56} if is_landscape else {"x": 0.04, "y": 0.58, "w": 0.80, "h": 0.20}
         caption_anchor = 0.82 if is_landscape else 0.53
-        video_blur = False
+        video_mode = "split-right"
+    elif layout == "video-top":
+        g = {"x": 0.04, "y": 0.54, "w": 0.80, "h": 0.24}
+        caption_anchor = 0.48
+        video_mode = "video-top"
+    elif layout == "graphic-only":
+        g = {"x": 0.04, "y": 0.14, "w": 0.80, "h": 0.54}
+        caption_anchor = 0.80 if is_landscape else 0.73
+        video_mode = "graphic-only"
     elif layout == "blurred-behind":
         g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36}
         caption_anchor = 0.80 if is_landscape else 0.69
-        video_blur = True
+        video_mode = "blur"
     else: # full-bleed
         g = {"x": 0.07, "y": 0.24, "w": 0.77, "h": 0.36}
         caption_anchor = 0.80 if is_landscape else 0.70
-        video_blur = False
+        video_mode = "full"
 
     return {
         "x": int(g["x"] * w),
@@ -326,11 +334,10 @@ def get_stage_geometry(layout, is_landscape=True, w=1920, h=1080):
         "w": int(g["w"] * w),
         "h": int(g["h"] * h),
         "caption_anchor": caption_anchor,
-        "video_blur": video_blur
+        "video_mode": video_mode
     }
 
-def generate_scene_svg_remotion_spec(component, props, layout="lower-third", theme=None, dx=0, dy=0, scale=1.0, w=1920, h=1080):
-    """Renders the EXACT scene component respecting Remotion's stage.ts geometry & layout slots."""
+def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0, dy=0, scale=1.0, w=1920, h=1080):
     if not theme: theme = {}
     accent = theme.get("accent", "#FFE600")
     fg = theme.get("fg", "#FFFFFF")
@@ -350,7 +357,6 @@ def generate_scene_svg_remotion_spec(component, props, layout="lower-third", the
         emphasis = esc(props.get("emphasis", ""))
 
         if layout == "lower-third":
-            # Broadcast lower-third banner
             items = []
             curr_y = box_y + 42
             if eyebrow:
@@ -363,18 +369,17 @@ def generate_scene_svg_remotion_spec(component, props, layout="lower-third", the
                 items.append(f'<text x="{box_x + 36}" y="{curr_y + 38}" font-family="{font_display}" font-size="20" font-weight="600" fill="#A0AEC0">{sub}</text>')
             content_svg = "\n".join(items)
         else:
-            # Vertical card (split-left / blurred-behind)
             items = []
             curr_y = box_y + 90
             if eyebrow:
-                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="24" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">{eyebrow.upper()}</text>')
-                curr_y += 80
+                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="22" font-weight="700" fill="#94A3B8" text-anchor="middle" letter-spacing="4">{eyebrow.upper()}</text>')
+                curr_y += 75
             if emphasis:
-                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="96" font-weight="900" fill="{accent}" text-anchor="middle">{emphasis}</text>')
-                curr_y += 90
-            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="52" font-weight="900" fill="{fg}" text-anchor="middle">{title.upper()}</text>')
+                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="90" font-weight="900" fill="{accent}" text-anchor="middle">{emphasis}</text>')
+                curr_y += 85
+            items.append(f'<text x="{box_x + box_w//2}" y="{curr_y}" font-family="{font_display}" font-size="48" font-weight="900" fill="{fg}" text-anchor="middle">{title.upper()}</text>')
             if sub and sub.lower() != title.lower():
-                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y + 55}" font-family="{font_display}" font-size="24" font-weight="600" fill="#CBD5E1" text-anchor="middle">{sub}</text>')
+                items.append(f'<text x="{box_x + box_w//2}" y="{curr_y + 55}" font-family="{font_display}" font-size="22" font-weight="600" fill="#CBD5E1" text-anchor="middle">{sub}</text>')
             content_svg = "\n".join(items)
 
     elif component == "FlowDiagram":
@@ -438,9 +443,15 @@ def generate_scene_svg_remotion_spec(component, props, layout="lower-third", the
 
             mark_svg = ""
             if mark == "cross":
-                mark_svg = f'<text x="{box_x + 70}" y="{curr_y}" font-family="{font_display}" font-size="36" font-weight="900" fill="#EF4444">✗</text>'
+                mark_svg = f"""<g transform="translate({box_x + 80}, {curr_y - 12})">
+                  <circle cx="0" cy="0" r="18" fill="#EF4444" fill-opacity="0.25"/>
+                  <path d="M-7,-7 L7,7 M7,-7 L-7,7" stroke="#EF4444" stroke-width="4" stroke-linecap="round"/>
+                </g>"""
             elif mark == "check":
-                mark_svg = f'<text x="{box_x + 70}" y="{curr_y}" font-family="{font_display}" font-size="36" font-weight="900" fill="#10B981">✓</text>'
+                mark_svg = f"""<g transform="translate({box_x + 80}, {curr_y - 12})">
+                  <circle cx="0" cy="0" r="18" fill="#10B981" fill-opacity="0.25"/>
+                  <path d="M-8,0 L-2,6 L8,-6" stroke="#10B981" stroke-width="4" stroke-linecap="round" fill="none"/>
+                </g>"""
 
             text_color = "#64748B" if struck else "#FFFFFF"
             items.append(mark_svg)
@@ -448,21 +459,33 @@ def generate_scene_svg_remotion_spec(component, props, layout="lower-third", the
 
             if struck:
                 approx_w = len(text) * 22
-                items.append(f'<line x1="{box_x + 115}" y1="{curr_y - 12}" x2="{box_x + 125 + approx_w}" y2="{curr_y - 12}" stroke="#EF4444" stroke-width="4"/>')
-            curr_y += 75
+                items.append(f'<line x1="{box_x + 115}" y1="{curr_y - 12}" x2="{box_x + 125 + approx_w}" y2="{curr_y - 12}" stroke="#EF4444" stroke-width="4.5" stroke-linecap="round"/>')
+            curr_y += 80
         content_svg = "\n".join(items)
 
     elif component in ["ScreenshotFrame", "BrowserFrame"]:
         label = esc(props.get("label", "DASHBOARD"))
         items = [
-            f'<rect x="{box_x + 30}" y="{box_y + 30}" width="{box_w - 60}" height="42" rx="8" fill="#1E293B"/>',
-            f'<circle cx="{box_x + 55}" cy="{box_y + 51}" r="6" fill="#EF4444"/>',
-            f'<circle cx="{box_x + 75}" cy="{box_y + 51}" r="6" fill="#F59E0B"/>',
-            f'<circle cx="{box_x + 95}" cy="{box_y + 51}" r="6" fill="#10B981"/>',
-            f'<text x="{box_x + 125}" y="{box_y + 57}" font-family="{font_mono}" font-size="15" fill="#94A3B8">{label.upper()}</text>',
-            f'<rect x="{box_x + 30}" y="{box_y + 85}" width="{box_w - 60}" height="{box_h - 115}" rx="12" fill="#0B132B" stroke="#1E293B" stroke-width="2"/>',
-            f'<text x="{box_x + box_w//2}" y="{box_y + box_h//2 + 20}" font-family="{font_display}" font-size="32" font-weight="800" fill="{accent}" text-anchor="middle">LIVE DEMO • {label}</text>'
+            f'<rect x="{box_x}" y="{box_y}" width="{box_w}" height="48" rx="20" fill="#1E293B"/>',
+            f'<rect x="{box_x}" y="{box_y + 32}" width="{box_w}" height="16" fill="#1E293B"/>',
+            f'<circle cx="{box_x + 32}" cy="{box_y + 24}" r="6" fill="#EF4444"/>',
+            f'<circle cx="{box_x + 52}" cy="{box_y + 24}" r="6" fill="#F59E0B"/>',
+            f'<circle cx="{box_x + 72}" cy="{box_y + 24}" r="6" fill="#10B981"/>',
+            f'<text x="{box_x + box_w//2}" y="{box_y + 30}" font-family="{font_mono}" font-size="14" fill="#94A3B8" text-anchor="middle">convex-dashboard.local</text>',
+            f'<g transform="translate({box_x + 48}, {box_y + 80})">'
         ]
+        skeleton_widths = [0.90, 0.75, 0.85, 0.60, 0.80, 0.50, 0.70]
+        s_y = 20
+        for i, w_frac in enumerate(skeleton_widths):
+            line_w = int((box_w - 96) * w_frac)
+            color = "#334155" if i % 3 == 0 else "#1E293B"
+            items.append(f'<rect x="0" y="{s_y}" width="{line_w}" height="24" rx="6" fill="{color}"/>')
+            s_y += 44
+        items.append('</g>')
+        items.append(f"""<g transform="translate({box_x + box_w - 220}, {box_y + box_h - 40})">
+          <rect x="0" y="0" width="200" height="52" rx="12" fill="#FFFFFF"/>
+          <text x="100" y="33" font-family="{font_display}" font-size="20" font-weight="900" fill="#0F172A" text-anchor="middle" letter-spacing="3">{label.upper()}</text>
+        </g>""")
         content_svg = "\n".join(items)
 
     else:
@@ -476,7 +499,7 @@ def generate_scene_svg_remotion_spec(component, props, layout="lower-third", the
     </filter>
   </defs>
   <g {transform_attr} filter="url(#shadow)">
-    <rect x="{box_x}" y="{box_y}" width="{box_w}" height="{box_h}" rx="20" fill="#0F172A" fill-opacity="0.9" stroke="#334155" stroke-width="2"/>
+    <rect x="{box_x}" y="{box_y}" width="{box_w}" height="{box_h}" rx="20" fill="#0F172A" fill-opacity="0.95" stroke="#334155" stroke-width="2"/>
     {content_svg}
   </g>
 </svg>"""
@@ -490,11 +513,7 @@ def render_cairo_png(svg_str, out_png, w=1920, h=1080):
         print(f"Warning: Cairo rendering failed: {e}")
         return False
 
-def build_ass_subtitles_with_layout_anchors(caption_lines, cues, theme, out_ass_path, res_x=1920, res_y=1080, style_info=None):
-    """
-    Dynamically positions subtitles based on Remotion's stage.ts captionAnchor for each active scene.
-    Prevents subtitles from ever colliding with lower-third banners or split-screens!
-    """
+def build_ass_subtitles(caption_lines, cues, theme, out_ass_path, res_x=1920, res_y=1080, style_info=None):
     if not style_info: style_info = {}
     font_display = theme.get("fontDisplay", style_info.get("fontDisplay", "Montserrat"))
     font_display = font_display.replace("'", "").replace('"', '').split(',')[0].strip()
@@ -532,7 +551,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             start_str = format_ass_time(start_t)
             end_str = format_ass_time(end_t)
 
-            # Find active layout anchor at this timestamp from stage.ts
             active_anchor = default_anchor
             for c in cues:
                 if c["start"] <= start_t <= c["end"]:
@@ -562,8 +580,8 @@ def main():
     parser.add_argument("--style", choices=list(STYLE_PRESETS.keys()) + ["default"], default="hormozi")
     parser.add_argument("--graphics-style", default="auto")
     parser.add_argument("--bitrate", default="6M")
-    parser.add_argument("--no-graphics", action="store_true", help="Do not render graphic overlays")
-    parser.add_argument("--no-captions", action="store_true", help="Do not burn in subtitle captions")
+    parser.add_argument("--no-graphics", action="store_true")
+    parser.add_argument("--no-captions", action="store_true")
     args = parser.parse_args()
 
     workdir = args.workdir
@@ -626,6 +644,9 @@ def main():
     if user_cuts:
         spans = subtract_user_cuts(spans, user_cuts)
 
+    output_duration = sum(max(0, s["srcOut"] - s["srcIn"]) for s in spans)
+    if output_duration <= 0: output_duration = 120.0
+
     source_video = None
     if os.path.exists(os.path.join(workdir, "production.json")):
         source_video = json.load(open(os.path.join(workdir, "production.json"))).get("source", {}).get("path")
@@ -637,6 +658,8 @@ def main():
 
     graphic_overlays = []
     blur_intervals = []
+    split_left_intervals = []
+    split_right_intervals = []
 
     if not args.no_graphics and args.graphics_style != "none":
         scene_cues = render_props.get("sceneCues", [])
@@ -671,10 +694,15 @@ def main():
             layout = sc_override.get("layout", cue.get("layout", "lower-third"))
             geom = get_stage_geometry(layout, is_landscape=is_landscape, w=res_x, h=res_y)
 
-            if geom["video_blur"]:
-                blur_intervals.append(f"between(t,{start_t:.3f},{end_t:.3f})")
+            cond = f"between(t,{start_t:.3f},{end_t:.3f})"
+            if geom["video_mode"] == "blur":
+                blur_intervals.append(cond)
+            elif geom["video_mode"] == "split-left":
+                split_left_intervals.append(cond)
+            elif geom["video_mode"] == "split-right":
+                split_right_intervals.append(cond)
 
-            svg = generate_scene_svg_remotion_spec(
+            svg = generate_scene_svg(
                 component=comp,
                 props=props,
                 layout=layout,
@@ -698,7 +726,7 @@ def main():
 
     ass_path = os.path.join(shm_dir, f"subtitles_custom_{os.getpid()}.ass")
     if not args.no_captions:
-        build_ass_subtitles_with_layout_anchors(caption_lines, graphic_overlays, theme, ass_path, res_x=res_x, res_y=res_y, style_info=style_info)
+        build_ass_subtitles(caption_lines, graphic_overlays, theme, ass_path, res_x=res_x, res_y=res_y, style_info=style_info)
 
     span_conds = [f"between(t,{s['srcIn']:.3f},{s['srcOut']:.3f})" for s in spans if s.get("srcOut", 0) > s.get("srcIn", 0)]
     select_filter = "+".join(span_conds) if span_conds else "1"
@@ -716,39 +744,66 @@ def main():
     for g in graphic_overlays:
         inputs += ["-i", g["path"]]
 
+    filter_chains = []
+
+    # 1. Base scaling
     base_vf = []
     if select_filter != "1":
         base_vf.append(f"select='{select_filter}',setpts=N/FRAME_RATE/TB")
-
     if target_format == "vertical":
         base_vf.append(f"crop=ih*9/16:ih:(iw-ih*9/16)/2:0,scale=1080:1920")
     else:
         base_vf.append(f"scale={res_x}:{res_y}")
 
-    # Apply video blur dynamically during blurred-behind scenes
+    # 2. Dynamic Blur FX
     if blur_intervals:
         blur_enable = "+".join(blur_intervals)
         base_vf.append(f"boxblur=15:1:enable='{blur_enable}'")
         base_vf.append(f"eq=brightness=-0.12:enable='{blur_enable}'")
 
-    ass_filter = f",ass={ass_path}" if not args.no_captions else ""
+    filter_chains.append(f"[0:v]{','.join(base_vf)}[v_scaled]")
+    curr_stage = "v_scaled"
 
-    if graphic_overlays:
-        filter_parts = [f"[0:v]{','.join(base_vf)}[v0]"]
-        for i, g in enumerate(graphic_overlays):
-            in_v = f"v{i}"
-            next_v = f"v{i+1}" if i < len(graphic_overlays) - 1 else "vlast"
-            filter_parts.append(f"[{in_v}][{i+1}:v]overlay=enable='between(t,{g['start']},{g['end']})':format=auto[{next_v}]")
-        filter_parts.append(f"[vlast]null{ass_filter}[outv]")
-        cmd_filter = ["-filter_complex", "; ".join(filter_parts), "-map", "[outv]", "-map", "0:a"]
-    else:
-        filter_str = f"{','.join(base_vf)}{ass_filter}"
-        cmd_filter = ["-vf", filter_str]
+    # 3. Dynamic Split-Left FX (Video left half, dark backdrop right half)
+    if split_left_intervals and is_landscape:
+        sl_cond = "+".join(split_left_intervals)
+        half_w = res_x // 2
+        filter_chains.append(f"[{curr_stage}]split=2[v_norm_sl][v_crop_sl]")
+        filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_sl]")
+        filter_chains.append(f"[v_crop_sl]crop={half_w}:{res_y}:{half_w // 2}:0[video_half_l]")
+        filter_chains.append(f"[bg_sl][video_half_l]overlay=x=0:y=0[split_canvas_l]")
+        filter_chains.append(f"[v_norm_sl][split_canvas_l]overlay=enable='{sl_cond}'[v_stage_sl]")
+        curr_stage = "v_stage_sl"
+
+    # 4. Dynamic Split-Right FX (Video right half, dark backdrop left half)
+    if split_right_intervals and is_landscape:
+        sr_cond = "+".join(split_right_intervals)
+        half_w = res_x // 2
+        filter_chains.append(f"[{curr_stage}]split=2[v_norm_sr][v_crop_sr]")
+        filter_chains.append(f"color=c=#0B0F19:s={res_x}x{res_y}:d={output_duration:.2f}[bg_sr]")
+        filter_chains.append(f"[v_crop_sr]crop={half_w}:{res_y}:{half_w // 2}:0[video_half_r]")
+        filter_chains.append(f"[bg_sr][video_half_r]overlay=x={half_w}:y=0[split_canvas_r]")
+        filter_chains.append(f"[v_norm_sr][split_canvas_r]overlay=enable='{sr_cond}'[v_stage_sr]")
+        curr_stage = "v_stage_sr"
+
+    # 5. Overlays (Graphic Cards from Cairo)
+    last_v = curr_stage
+    for i, g in enumerate(graphic_overlays):
+        next_v = f"v_ov_{i}"
+        filter_chains.append(f"[{last_v}][{i+1}:v]overlay=enable='between(t,{g['start']},{g['end']})':format=auto[{next_v}]")
+        last_v = next_v
+
+    # 6. Burn-in Subtitles with Dynamic Anchors
+    ass_filter = f",ass={ass_path}" if not args.no_captions else ""
+    filter_chains.append(f"[{last_v}]null{ass_filter}[outv]")
+
+    cmd_filter = ["-filter_complex", "; ".join(filter_chains), "-map", "[outv]", "-map", "0:a"]
 
     if select_filter != "1":
         cmd_filter += ["-af", f"aselect='{select_filter}',asetpts=N/SR/TB"]
 
     gpu_nvenc_flags = [
+        "-shortest",
         "-threads", "4",
         "-filter_threads", "2",
         "-c:v", "h264_nvenc",
@@ -763,11 +818,15 @@ def main():
 
     cmd = ["ffmpeg", "-y"] + inputs + cmd_filter + gpu_nvenc_flags
 
-    print(f"🎬 Starting High-Speed Cairo GPU Export (Tesla T4 NVENC with Full Remotion Layout Parity)...")
+    print(f"🎬 Starting High-Speed Cairo GPU Export (Tesla T4 NVENC with Complete Remotion Layout Parity)...")
     if graphic_overlays:
-        print(f"✨ Rendering {len(graphic_overlays)} Remotion-Spec Components with Dynamic Subtitle Anchors:")
+        print(f"✨ Active Stages:")
+        if split_left_intervals:
+            print(f"   • Split-Left Stage Active ({len(split_left_intervals)} cues): Video cropped to Left 50%, Card on Right 50%")
+        if blur_intervals:
+            print(f"   • Blurred-Behind Stage Active ({len(blur_intervals)} cues): Dynamic Video Blur + Centered Card")
         for idx, g in enumerate(graphic_overlays):
-            print(f"   [{idx+1}] {g['comp']} at {g['start']:.2f}s -> {g['end']:.2f}s (Subtitle Anchor Y: {int(g['caption_anchor']*res_y)}px)")
+            print(f"   [{idx+1}] {g['comp']} at {g['start']:.2f}s -> {g['end']:.2f}s")
     else:
         print(f"⚡ Clean Cut Video (No Graphics)")
 
