@@ -1401,13 +1401,27 @@ replace_in_file(
 # Patch produce-wizard.ts so AI graphics prompt is explicit, defaults to No, and offers Cairo styles
 replace_in_file(
     "/tools/node/lib/node_modules/ossclip/src/interactive/produce-wizard.ts",
-    'message: "Plan title cards and graphics with an LLM?", initialValue: false',
-    'message: "Create graphics with AI? (No = clean cut video without graphic overlays)", initialValue: false'
-)
-replace_in_file(
-    "/tools/node/lib/node_modules/ossclip/src/interactive/produce-wizard.ts",
-    'initialValue: false,\n    }),\n  ) as boolean;',
-    'initialValue: false,\n    }),\n  ) as boolean;\n\n  const graphicsStyle = graphics ? (unwrap(await select({\n    message: "Select Cairo AI graphics style:",\n    options: [\n      { value: "tokyo-night", label: "Tokyo Night Terminal", hint: "macOS Code & CLI Window" },\n      { value: "linear", label: "Linear Obsidian", hint: "Cloud & Data Architecture Flow" },\n      { value: "stripe", label: "Stripe Clean Paper", hint: "High-Contrast Comparison Matrix" },\n      { value: "vercel", label: "Vercel Geist Dark", hint: "Performance Metrics & KPI Cards" },\n      { value: "auto", label: "Auto Match", hint: "AI chooses based on speech topic" }\n    ]\n  })) as string) : undefined;'
+    '''  const graphics = unwrap(
+    await confirm({ message: "Plan title cards and graphics with an LLM?", initialValue: false }),
+  ) as boolean;''',
+    '''  const graphics = unwrap(
+    await confirm({ message: "Create graphics with AI? (No = clean cut video without graphic overlays)", initialValue: false }),
+  ) as boolean;
+
+  const graphicsStyle = graphics
+    ? (unwrap(
+        await select({
+          message: "Select Cairo AI graphics style:",
+          options: [
+            { value: "tokyo-night", label: "Tokyo Night Terminal", hint: "macOS Code & CLI Window" },
+            { value: "linear", label: "Linear Obsidian", hint: "Cloud & Data Architecture Flow" },
+            { value: "stripe", label: "Stripe Clean Paper", hint: "High-Contrast Comparison Matrix" },
+            { value: "vercel", label: "Vercel Geist Dark", hint: "Performance Metrics & KPI Cards" },
+            { value: "auto", label: "Auto Match", hint: "AI chooses based on speech topic" },
+          ],
+        }),
+      ) as string)
+    : undefined;'''
 )
 replace_in_file(
     "/tools/node/lib/node_modules/ossclip/src/interactive/produce-wizard.ts",
