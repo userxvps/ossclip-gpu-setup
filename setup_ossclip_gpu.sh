@@ -666,18 +666,21 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
         n_count = len(nodes)
 
         items = [
-            f'<text x="{center_x}" y="{box_y + pad_y + 18}" font-family="{font_display}" font-size="18" font-weight="700" fill="#94A3B8" letter-spacing="3" text-anchor="middle">ARCHITECTURE PIPELINE</text>'
+            f'<text x="{center_x}" y="{box_y + pad_y + 16}" font-family="{font_display}" font-size="17" font-weight="700" fill="#94A3B8" letter-spacing="3" text-anchor="middle">ARCHITECTURE PIPELINE</text>'
         ]
 
-        use_horizontal = is_landscape and n_count <= 4 and inner_w >= 600
+        # Use horizontal only on genuinely wide slots (pip-bubble, graphic-only, blurred-behind) with <= 4 nodes
+        use_horizontal = is_landscape and (n_count <= 4) and (inner_w >= 850) and ((inner_w / max(1, inner_h)) >= 1.5)
 
         if use_horizontal:
-            arrow_w = 40
+            arrow_w = 44
             total_arrow_w = (n_count - 1) * arrow_w
-            chip_w = (inner_w - total_arrow_w - 20) // n_count
-            chip_h = min(90, inner_h - 80)
+            avail_chip_w = inner_w - total_arrow_w - 48
+            chip_w = min(280, avail_chip_w // n_count)
+            total_w = n_count * chip_w + total_arrow_w
+            chip_h = min(80, max(56, inner_h - 90))
             chip_y = box_y + (box_h - chip_h) // 2 + 10
-            start_x = box_x + pad_x + (inner_w - (n_count * chip_w + total_arrow_w)) // 2
+            start_x = center_x - (total_w // 2)
 
             for i, node in enumerate(nodes):
                 cx = start_x + i * (chip_w + arrow_w)
@@ -688,24 +691,25 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
 
                 node_str = esc(str(node)).upper()
                 node_fsize = 20
-                if len(node_str) * node_fsize * 0.65 > (chip_w - 20):
-                    node_fsize = max(14, int((chip_w - 20) / (len(node_str) * 0.65)))
+                if len(node_str) * node_fsize * 0.65 > (chip_w - 24):
+                    node_fsize = max(13, int((chip_w - 24) / (len(node_str) * 0.65)))
 
                 items.append(f'<rect x="{cx}" y="{chip_y}" width="{chip_w}" height="{chip_h}" rx="14" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
-                items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + chip_h//2 + int(node_fsize * 0.35)}" font-family="{font_display}" font-size="{node_fsize}" font-weight="800" fill="{text_color}" text-anchor="middle">{node_str}</text>')
+                items.append(f'<text x="{cx + chip_w//2}" y="{chip_y + chip_h//2 + int(node_fsize * 0.35)}" font-family="{font_display}" font-size="{node_fsize}" font-weight="900" fill="{text_color}" text-anchor="middle">{node_str}</text>')
                 if i < n_count - 1:
                     items.append(f'<text x="{cx + chip_w + arrow_w//2}" y="{chip_y + chip_h//2 + 8}" font-family="{font_display}" font-size="28" font-weight="900" fill="#64748B" text-anchor="middle">→</text>')
 
         else:
-            arrow_h = 36
+            # Vertical stack (split-left, split-right, portrait, or 5+ nodes)
+            arrow_h = 32
             total_arrow_h = (n_count - 1) * arrow_h
-            avail_h = inner_h - 60 - total_arrow_h
-            chip_h = min(75, avail_h // n_count)
-            chip_w = min(680, inner_w - 30)
+            avail_h = inner_h - 50 - total_arrow_h
+            chip_h = min(68, max(44, avail_h // n_count))
+            chip_w = min(560, inner_w - 40)
             chip_x = center_x - (chip_w // 2)
 
             total_stack_h = (n_count * chip_h) + total_arrow_h
-            start_y = box_y + pad_y + 40 + (inner_h - 40 - total_stack_h) // 2
+            start_y = box_y + pad_y + 34 + max(0, (inner_h - 34 - total_stack_h) // 2)
 
             for i, node in enumerate(nodes):
                 cy = start_y + i * (chip_h + arrow_h)
@@ -715,14 +719,14 @@ def generate_scene_svg(component, props, layout="lower-third", theme=None, dx=0,
                 border_color = accent if is_emph else "#475569"
 
                 node_str = esc(str(node)).upper()
-                node_fsize = 24
-                if len(node_str) * node_fsize * 0.65 > (chip_w - 30):
-                    node_fsize = max(16, int((chip_w - 30) / (len(node_str) * 0.65)))
+                node_fsize = 22
+                if len(node_str) * node_fsize * 0.65 > (chip_w - 28):
+                    node_fsize = max(14, int((chip_w - 28) / (len(node_str) * 0.65)))
 
                 items.append(f'<rect x="{chip_x}" y="{cy}" width="{chip_w}" height="{chip_h}" rx="14" fill="{bg}" stroke="{border_color}" stroke-width="2"/>')
-                items.append(f'<text x="{center_x}" y="{cy + chip_h//2 + int(node_fsize * 0.35)}" font-family="{font_display}" font-size="{node_fsize}" font-weight="800" fill="{text_color}" text-anchor="middle">{node_str}</text>')
+                items.append(f'<text x="{center_x}" y="{cy + chip_h//2 + int(node_fsize * 0.35)}" font-family="{font_display}" font-size="{node_fsize}" font-weight="900" fill="{text_color}" text-anchor="middle">{node_str}</text>')
                 if i < n_count - 1:
-                    items.append(f'<text x="{center_x}" y="{cy + chip_h + arrow_h//2 + 7}" font-family="{font_display}" font-size="24" font-weight="900" fill="#64748B" text-anchor="middle">↓</text>')
+                    items.append(f'<text x="{center_x}" y="{cy + chip_h + arrow_h//2 + 7}" font-family="{font_display}" font-size="22" font-weight="900" fill="#64748B" text-anchor="middle">↓</text>')
 
         content_svg = "\n".join(items)
 
@@ -1442,6 +1446,172 @@ replace_in_file(
     "/tools/node/lib/node_modules/ossclip/src/program.ts",
     '.option("--produce", "run the LLM producer brain to plan title cards & graphics", false)',
     '.option("--produce", "run the LLM producer brain to plan title cards & graphics", false)\n    .option("--graphics-style <style>", "Cairo AI graphics style: tokyo-night | linear | stripe | vercel | auto", "auto")'
+)
+
+# Patch FlowDiagram.tsx and fit.ts for centered text, symmetric spacing, and slot auto-scaling
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/scenes/src/fit.ts",
+    '''export const MIN_ROW_FONT = 26;
+export const MIN_STACK_FONT = 22;''',
+    '''export const MIN_ROW_FONT = 16;
+export const MIN_STACK_FONT = 18;'''
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/scenes/src/fit.ts",
+    '''const MAX_STACK_FONT = 76;''',
+    '''const MAX_STACK_FONT = 52;'''
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/scenes/src/fit.ts",
+    '''  const CHAR_W = 0.78;
+  const CHIP_PAD = 1.6;
+  const ARROW_W = 1.8;
+  const budget = widthPx - 20; // root padding "0 10px"
+
+  const rowFont = Math.floor(
+    Math.min(budget / (CHAR_W * chars + CHIP_PAD * n + ARROW_W * (n - 1)), heightPx / CHIP_H),
+  );
+  const longest = Math.max(...nodes.map((node) => node.length), 1);
+  const stackUnits = CHIP_H * n + ARROW_ROW_H * (n - 1);
+  const stackFont = Math.floor(
+    Math.min(budget / (CHAR_W * longest + CHIP_PAD), heightPx / stackUnits, MAX_STACK_FONT),
+  );
+
+  const rowFits = rowFont >= MIN_ROW_FONT;
+  const stackFits = stackFont >= MIN_STACK_FONT;
+  if (!stackFits) return { mode: "row", fontSize: Math.max(MIN_ROW_FONT, rowFont) };
+  if (!rowFits) return { mode: "stack", fontSize: stackFont };
+  // Both are legible — take the one that uses the slot.
+  return rowFont * CHIP_H >= stackFont * stackUnits
+    ? { mode: "row", fontSize: rowFont }
+    : { mode: "stack", fontSize: stackFont };''',
+    '''  const CHAR_W = 0.72;
+  const CHIP_PAD = 1.6;
+  const ARROW_W = 1.5;
+  const budget = Math.max(100, widthPx - 56);
+  const availHeight = Number.isFinite(heightPx) ? heightPx : 400;
+
+  const rowFont = Math.floor(
+    Math.min(budget / (CHAR_W * chars + CHIP_PAD * n + ARROW_W * (n - 1)), availHeight / CHIP_H),
+  );
+  const longest = Math.max(...nodes.map((node) => node.length), 1);
+  const stackUnits = CHIP_H * n + ARROW_ROW_H * (n - 1);
+  const stackFont = Math.floor(
+    Math.min(budget / (CHAR_W * longest + CHIP_PAD), availHeight / stackUnits, MAX_STACK_FONT),
+  );
+
+  const preferStack = (widthPx < 740 && n >= 3) || (widthPx < availHeight * 1.15 && n >= 3);
+  if (preferStack && stackFont >= MIN_STACK_FONT) {
+    return { mode: "stack", fontSize: Math.min(36, stackFont) };
+  }
+
+  const rowFits = rowFont >= MIN_ROW_FONT;
+  const stackFits = stackFont >= MIN_STACK_FONT;
+  if (!stackFits) return { mode: "row", fontSize: Math.max(14, Math.min(48, rowFont)) };
+  if (!rowFits) return { mode: "stack", fontSize: Math.max(16, Math.min(36, stackFont)) };
+
+  return rowFont * CHIP_H >= stackFont * stackUnits
+    ? { mode: "row", fontSize: Math.min(44, rowFont) }
+    : { mode: "stack", fontSize: Math.min(36, stackFont) };'''
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/scenes/src/components/FlowDiagram.tsx",
+    '''        borderRadius: theme.radiusPx / 2,
+        padding: `${fontSize * 0.55}px ${fontSize * 0.8}px`,''',
+    '''        borderRadius: Math.max(8, theme.radiusPx / 2),
+        padding: `${Math.max(6, fontSize * 0.45)}px ${Math.max(14, fontSize * 0.8)}px`,'''
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/scenes/src/components/FlowDiagram.tsx",
+    '''        whiteSpace: "nowrap",
+        fontFamily: theme.fontDisplay,''',
+    '''        whiteSpace: "nowrap",
+        textAlign: "center",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: theme.fontDisplay,
+        boxSizing: "border-box",
+        maxWidth: "100%",
+        flexShrink: 0,'''
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/scenes/src/components/FlowDiagram.tsx",
+    '''        lineHeight: 1,
+        paddingLeft: down ? 0 : fontSize * 0.55,''',
+    '''        lineHeight: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,'''
+)
+replace_in_file(
+    "/tools/node/lib/node_modules/ossclip/node_modules/@ossclip/scenes/src/components/FlowDiagram.tsx",
+    '''    <div
+      style={{
+        display: "flex",
+        flexDirection: row ? "row" : "column",
+        flexWrap: "nowrap",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: row ? 0 : fontSize * 0.45,
+        padding: "0 10px",
+      }}
+    >
+      {props.nodes.map((node, i) => (
+        // Arrow and its target chip are ONE flex item, and the arrow enters
+        // AFTER its chip — an arrow into nothing is impossible in either shape.
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            flexDirection: row ? "row" : "column",
+            alignItems: "center",
+            gap: row ? fontSize * 0.55 : fontSize * 0.45,
+          }}
+        >
+          {i > 0 ? <Arrow delay={i * 6 + 3} fontSize={fontSize} theme={theme} down={!row} /> : null}
+          <Chip
+            text={node}
+            emphasized={props.emphasizeLast && i === props.nodes.length - 1}
+            delay={i * 6}
+            fontSize={fontSize}
+            theme={theme}
+            editId={`node-${i}`}
+            edits={edits}
+          />
+        </div>
+      ))}
+    </div>''',
+    '''    <div
+      style={{
+        display: "flex",
+        flexDirection: row ? "row" : "column",
+        flexWrap: "nowrap",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: row ? Math.max(12, fontSize * 0.55) : Math.max(10, fontSize * 0.45),
+        padding: row ? "0 28px" : "14px 20px",
+        width: "100%",
+        height: "100%",
+        boxSizing: "border-box",
+      }}
+    >
+      {props.nodes.map((node, i) => (
+        <React.Fragment key={i}>
+          {i > 0 ? <Arrow delay={i * 6 + 3} fontSize={fontSize} theme={theme} down={!row} /> : null}
+          <Chip
+            text={node}
+            emphasized={props.emphasizeLast && i === props.nodes.length - 1}
+            delay={i * 6}
+            fontSize={fontSize}
+            theme={theme}
+            editId={`node-${i}`}
+            edits={edits}
+          />
+        </React.Fragment>
+      ))}
+    </div>'''
 )
 PYEOF
 
