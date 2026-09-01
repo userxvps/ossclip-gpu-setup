@@ -70,7 +70,7 @@ def main():
         elif args.model and "large" in args.model.lower():
             model_name = "large-v3"
 
-    batch_size = int(os.environ.get("WHISPER_BATCH_SIZE", "16"))
+    batch_size = int(os.environ.get("WHISPER_BATCH_SIZE", "24"))
 
     device = "cuda"
     compute_type = "float16"
@@ -113,6 +113,8 @@ def main():
             segments, info = batched_model.transcribe(
                 audio_path,
                 batch_size=batch_size,
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=400),
                 language=args.language if args.language != "auto" else None,
                 task=task,
                 initial_prompt=args.prompt,
@@ -128,6 +130,7 @@ def main():
             language=args.language,
             task=task,
             initial_prompt=args.prompt,
+            vad_filter=True,
             word_timestamps=True
         )
 
@@ -138,65 +141,63 @@ def main():
         words = s.words or []
         if words:
             for w in words:
-                if not w.word or not w.word.strip():
-                    continue
-                start_sec = max(0.0, float(w.start))
-                end_sec = max(start_sec + 0.05, float(w.end))
-                start_ms = int(round(start_sec * 1000))
-                end_ms = int(round(end_sec * 1000))
-
-                from_h = int(start_sec // 3600)
-                from_m = int((start_sec % 3600) // 60)
-                from_s = start_sec % 60
-                to_h = int(end_sec // 3600)
-                to_m = int((end_sec % 3600) // 60)
-                to_s = end_sec % 60
-
                 transcription_list.append({
                     "timestamps": {
-                        "from": f"{from_h:02d}:{from_m:02d}:{from_s:06.3f}".replace(".", ","),
-                        "to": f"{to_h:02d}:{to_m:02d}:{to_s:06.3f}".replace(".", ",")
+                        "from": f"{format_whisper_time(w.start)}",
+                        "to": f"{format_whisper_time(w.end)}"
                     },
                     "offsets": {
-                        "from": start_ms,
-                        "to": end_ms
+                        "from": int(w.start * 1000),
+                        "to": int(w.end * 1000)
                     },
                     "text": w.word
                 })
-        elif s.text and s.text.strip():
-            raw_words = s.text.strip().split()
-            dur = max(0.1, s.end - s.start)
-            w_dur = dur / len(raw_words)
-            for idx, rw in enumerate(raw_words):
-                w_start = s.start + idx * w_dur
-                w_end = s.start + (idx + 1) * w_dur
-                start_ms = int(round(w_start * 1000))
-                end_ms = int(round(w_end * 1000))
-                transcription_list.append({
-                    "timestamps": {
-                        "from": f"{int(w_start//3600):02d}:{int((w_start%3600)//60):02d}:{w_start%60:06.3f}".replace(".", ","),
-                        "to": f"{int(w_end//3600):02d}:{int((w_end%3600)//60):02d}:{w_end%60:06.3f}".replace(".", ",")
-                    },
-                    "offsets": {
-                        "from": start_ms,
-                        "to": end_ms
-                    },
-                    "text": (" " + rw) if (idx > 0 or transcription_list) else rw
-                })
+        else:
+            transcription_list.append({
+                "timestamps": {
+                    "from": f"{format_whisper_time(s.start)}",
+                    "to": f"{format_whisper_time(s.end)}"
+                },
+                "offsets": {
+                    "from": int(s.start * 1000),
+                    "to": int(s.end * 1000)
+                },
+                "text": s.text.strip()
+            })
 
-    out_obj = {
-        "systeminfo": f"Tesla T4 GPU (faster-whisper CUDA fp16 batched-{batch_size})" if device == "cuda" else "CPU (faster-whisper int8)",
-        "model": {"type": model_name},
-        "params": {"language": detected_lang},
-        "result": {"language": detected_lang},
+    output_data = {
+        "systeminfo": "faster-whisper GPU Tensor Core Batched Acceleration",
+        "model": {
+            "type": model_name,
+            "multilingual": "en" not in model_name
+        },
+        "params": {
+            "model": model_name,
+            "language": detected_lang,
+            "translate": args.translate
+        },
+        "result": {
+            "language": detected_lang
+        },
         "transcription": transcription_list
     }
 
-    if args.output_file:
-        with open(f"{args.output_file}.json", "w", encoding="utf-8") as f:
-            json.dump(out_obj, f, indent=2, ensure_ascii=False)
+    out_base = args.output_file
+    if out_base:
+        out_json = f"{out_base}.json"
     else:
-        print(json.dumps(out_obj, indent=2, ensure_ascii=False))
+        out_json = "transcript.json"
+
+    with open(out_json, "w", encoding="utf-8") as f:
+        json.dump(output_data, f, indent=2)
+
+def format_whisper_time(seconds):
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int(round((seconds - int(seconds)) * 1000))
+    if ms >= 1000: ms = 999
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 if __name__ == "__main__":
     main()
@@ -543,6 +544,9 @@ def main():
         try: overrides = json.load(open(os.path.join(workdir, "overrides.json"), "r"))
         except: pass
 
+    # Use /dev/shm (Shared RAM) for intermediate vector assets to eliminate disk I/O
+    shm_dir = "/dev/shm" if os.path.exists("/dev/shm") else workdir
+
     settings = render_props.get("settings", {})
     prop_w = settings.get("width", 1920)
     prop_h = settings.get("height", 1080)
@@ -598,7 +602,7 @@ def main():
             if os.path.exists(p) and os.path.getsize(p) > 1000:
                 source_video = p; break
 
-    # 3. Plan & Generate MULTIPLE Cairo Graphics Overlays with User Layout & Text Edits
+    # 3. Plan & Generate MULTIPLE Cairo Graphics Overlays in RAM (/dev/shm)
     cairo_style = args.graphics_style
     if cairo_style == "auto":
         cairo_style = render_props.get("graphicsStyle", overrides.get("graphicsStyle", "auto"))
@@ -625,26 +629,21 @@ def main():
         else:
             cues_to_render = plan_multi_cairo_cues(total_dur_sec, preferred_style=cairo_style)
 
+        pid = os.getpid()
         for idx, cue in enumerate(cues_to_render):
             cue_id = cue.get("id", f"scene-{idx}")
-            # Check user scene override
             sc_override = scene_overrides.get(cue_id, {}) or scene_overrides.get(f"scene-{idx}", {})
 
-            # Skip if user hid this graphic
             if sc_override.get("hidden") is True:
                 continue
 
-            # Merge user-edited text props
             cue_props = {**cue.get("props", {}), **sc_override.get("props", {})}
-
-            # Apply user layout & positioning edits (dx, dy, scale)
             elem_transforms = sc_override.get("elements", {})
             card_transform = elem_transforms.get("card", {}) or elem_transforms.get("root", {})
             cue_props["dx"] = card_transform.get("dx", cue_props.get("dx", 0))
             cue_props["dy"] = card_transform.get("dy", cue_props.get("dy", 0))
             cue_props["scale"] = card_transform.get("scale", cue_props.get("scale", 1.0))
 
-            # Apply timing pin overrides if user adjusted time in editor
             start_t = cue["start"]
             end_t = cue["end"]
             if sc_override.get("timing"):
@@ -653,7 +652,8 @@ def main():
                 end_t = timing.get("srcEnd", timing.get("endSec", end_t))
 
             sty = cue.get("style", cairo_style if cairo_style != "auto" else "tokyo-night")
-            png_path = os.path.join(workdir, f"cairo_overlay_{idx}.png")
+            # Write to RAM-disk buffer
+            png_path = os.path.join(shm_dir, f"cairo_overlay_{idx}_{pid}.png")
             if render_cairo_png(sty, cue_props, png_path, w=res_x, h=res_y):
                 graphic_overlays.append({
                     "path": png_path,
@@ -662,7 +662,7 @@ def main():
                     "style": sty
                 })
 
-    ass_path = os.path.join(workdir, "subtitles_custom.ass")
+    ass_path = os.path.join(shm_dir, f"subtitles_custom_{os.getpid()}.ass")
     if not args.no_captions:
         build_ass_subtitles(caption_lines, theme, ass_path, res_x=res_x, res_y=res_y, style_info=style_info)
 
@@ -707,10 +707,18 @@ def main():
     if select_filter != "1":
         cmd_filter += ["-af", f"aselect='{select_filter}',asetpts=N/SR/TB"]
 
-    # Use preset p4 for high-speed balanced NVENC throughput (~42+ FPS)
+    # Maximum GPU & RAM Concurrency Flags:
+    # 1. Multi-threaded demuxing & filtering (-threads 4, -filter_threads 2)
+    # 2. 32 hardware frame surfaces allocated in Tesla T4 VRAM (-surfaces 32)
+    # 3. 16-frame lookahead buffer in GPU memory (-rc-lookahead 16)
+    # 4. Preset p4 for optimal NVENC encoding speed (42+ FPS)
     gpu_nvenc_flags = [
+        "-threads", "4",
+        "-filter_threads", "2",
         "-c:v", "h264_nvenc",
         "-preset", "p4",
+        "-surfaces", "32",
+        "-rc-lookahead", "16",
         "-tune", "hq",
         "-b:v", args.bitrate,
         "-c:a", "aac", "-b:a", "192k",
@@ -719,9 +727,9 @@ def main():
 
     cmd = ["ffmpeg", "-y"] + inputs + cmd_filter + gpu_nvenc_flags
 
-    print(f"🎬 Starting GPU Export (Tesla T4 NVENC Preset P4)...")
+    print(f"🎬 Starting GPU Export (Tesla T4 NVENC with 32 VRAM Surfaces & RAM Caching)...")
     if graphic_overlays:
-        print(f"✨ Generating and compositing {len(graphic_overlays)} Cairo AI Graphics with user layout & text edits:")
+        print(f"✨ Compositing {len(graphic_overlays)} Cairo AI Graphics (Assets loaded from /dev/shm):")
         for idx, g in enumerate(graphic_overlays):
             print(f"   [{idx+1}] {g['style'].upper()} graphic at {g['start']}s -> {g['end']}s")
     else:
